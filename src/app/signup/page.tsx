@@ -6,13 +6,7 @@ import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import {
-  Github,
-  Loader2,
-  Lock,
-  Mail,
-  MessageSquare,
-} from 'lucide-react';
+import { Loader2, Lock, Mail, User } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -33,40 +27,26 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { login, signInWithGithub, signInWithGoogle } from '@/lib/actions';
+import { signup } from '@/lib/actions';
 import Logo from '@/components/logo';
 
 const formSchema = z.object({
+  name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email({ message: 'Please enter a valid email.' }),
   password: z
     .string()
     .min(6, { message: 'Password must be at least 6 characters.' }),
 });
 
-const GoogleIcon = () => (
-    <svg
-      role="img"
-      viewBox="0 0 24 24"
-      xmlns="http://www.w3.org/2000/svg"
-      className="size-4"
-    >
-      <title>Google</title>
-      <path
-        d="M12.48 10.92v3.28h7.84c-.24 1.84-.85 3.18-1.73 4.1-1.05 1.05-2.86 2.25-5.02 2.25-4.55 0-8.23-3.73-8.23-8.29s3.68-8.29 8.23-8.29c2.49 0 4.09.98 5.27 2.05l2.6-2.58C18.07.73 15.49 0 12.48 0 5.88 0 .42 5.51.42 12.3s5.46 12.3 12.06 12.3c3.42 0 6.17-1.12 8.22-3.21 2.1-2.1 2.85-5.05 2.85-8.22 0-.75-.08-1.48-.21-2.18h-10.6z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<null | 'google' | 'github'>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      name: '',
       email: '',
       password: '',
     },
@@ -74,45 +54,23 @@ export default function LoginPage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setLoading(true);
-    const error = await login(values);
+    const error = await signup(values);
 
     if (error) {
       toast({
-        title: 'Error logging in',
+        title: 'Error creating account',
         description: error,
         variant: 'destructive',
       });
     } else {
       toast({
-        title: 'Success!',
-        description: 'You have been logged in.',
+        title: 'Account created!',
+        description: 'You have been successfully signed up.',
       });
       router.push('/chat');
     }
     setLoading(false);
   }
-
-  async function handleSocialLogin(provider: 'google' | 'github') {
-    setSocialLoading(provider);
-    let error;
-    if (provider === 'google') {
-        error = await signInWithGoogle();
-    } else {
-        error = await signInWithGithub();
-    }
-
-    if(error) {
-        toast({
-            title: `Error with ${provider} login`,
-            description: error,
-            variant: 'destructive',
-        });
-    } else {
-        router.push('/chat');
-    }
-    setSocialLoading(null);
-  }
-
 
   return (
     <div className="flex min-h-screen w-full items-center justify-center p-4">
@@ -121,14 +79,30 @@ export default function LoginPage() {
           <div className="mb-4 flex justify-center">
             <Logo />
           </div>
-          <CardTitle>Welcome Back!</CardTitle>
+          <CardTitle>Create an Account</CardTitle>
           <CardDescription>
-            Enter your credentials to access your account.
+            Enter your details to get started with ChattyNext.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="sr-only">Name</FormLabel>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                      <FormControl>
+                        <Input placeholder="Name" {...field} className="pl-10" />
+                      </FormControl>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="email"
@@ -172,39 +146,19 @@ export default function LoginPage() {
               />
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Sign In
+                Create Account
               </Button>
             </form>
           </Form>
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">
-                Or continue with
-              </span>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Button variant="outline" onClick={() => handleSocialLogin('google')} disabled={!!socialLoading}>
-              {socialLoading === 'google' ? <Loader2 className="mr-2 size-4 animate-spin"/> : <GoogleIcon />}
-              Google
-            </Button>
-            <Button variant="outline" onClick={() => handleSocialLogin('github')} disabled={!!socialLoading}>
-              {socialLoading === 'github' ? <Loader2 className="mr-2 size-4 animate-spin"/> : <Github className="mr-2 size-4"/>}
-              GitHub
-            </Button>
-          </div>
         </CardContent>
         <CardFooter className="flex justify-center text-sm">
           <p className="text-muted-foreground">
-            Don't have an account?{' '}
+            Already have an account?{' '}
             <Link
-              href="/signup"
+              href="/"
               className="font-medium text-primary hover:underline"
             >
-              Sign up
+              Sign In
             </Link>
           </p>
         </CardFooter>

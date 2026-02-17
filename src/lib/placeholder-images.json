@@ -1,3 +1,58 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "user-avatar-1",
+      "description": "Avatar for a male user with glasses",
+      "imageUrl": "https://images.unsplash.com/photo-1560250097-0b93528c311a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxtYW4lMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzEyNjI5ODh8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "man portrait"
+    },
+    {
+      "id": "user-avatar-2",
+      "description": "Avatar for a female user with curly hair",
+      "imageUrl": "https://images.unsplash.com/photo-1557053908-4793c484d06f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHx3b21hbiUyMHBvcnRyYWl0fGVufDB8fHx8MTc3MTIyMDQ1Nnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "woman portrait"
+    },
+    {
+      "id": "user-avatar-3",
+      "description": "Avatar for a user with a neutral expression",
+      "imageUrl": "https://images.unsplash.com/flagged/photo-1595514191830-3e96a518989b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8cGVyc29uJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzcxMjUxNTAxfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person portrait"
+    },
+    {
+      "id": "user-avatar-4",
+      "description": "Avatar for a user smiling",
+      "imageUrl": "https://images.unsplash.com/photo-1580489944761-15a19d654956?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxzbWlsaW5nJTIwcGVyc29ufGVufDB8fHx8MTc3MTMyMzQzMXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "smiling person"
+    },
+    {
+      "id": "user-avatar-5",
+      "description": "Avatar for a user in outdoor setting",
+      "imageUrl": "https://images.unsplash.com/photo-1629322415112-a986264c08f0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxwZXJzb24lMjBvdXRkb29yc3xlbnwwfHx8fDE3NzEzMzQ3Mjd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person outdoors"
+    },
+    {
+      "id": "user-avatar-6",
+      "description": "Avatar for a user with a hat",
+      "imageUrl": "https://images.unsplash.com/photo-1765248628055-ca8f89795fbc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBoYXR8ZW58MHx8fHwxNzcxMjc3OTk0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person hat"
+    },
+    {
+      "id": "user-avatar-7",
+      "description": "Avatar for a user, black and white",
+      "imageUrl": "https://images.unsplash.com/photo-1741035726677-3a26a73f49aa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxwb3J0cmFpdCUyMG1vbm9jaHJvbWV8ZW58MHx8fHwxNzcxMzM0NzI3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "portrait monochrome"
+    },
+    {
+      "id": "user-avatar-8",
+      "description": "Abstract avatar",
+      "imageUrl": "https://images.unsplash.com/photo-1550859492-d5da9d8e45f3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxhYnN0cmFjdCUyMGNvbG9yfGVufDB8fHx8MTc3MTMwMDk4M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "abstract color"
+    },
+    {
+      "id": "user-avatar-default",
+      "description": "Default user avatar",
+      "imageUrl": "https://images.unsplash.com/photo-1721701233113-85e8e91eb79b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxzaWxob3VldHRlJTIwcGVyc29ufGVufDB8fHx8MTc3MTI2OTQ5OXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "silhouette person"
+    }
+  ]
 }
