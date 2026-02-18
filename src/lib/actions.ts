@@ -2,11 +2,8 @@
 
 import {
   createUserWithEmailAndPassword,
-  GithubAuthProvider,
-  GoogleAuthProvider,
   sendEmailVerification,
   signInWithEmailAndPassword,
-  signInWithPopup,
   signOut as firebaseSignOut,
   updateProfile,
 } from 'firebase/auth';
@@ -98,6 +95,7 @@ export async function signup(values: z.infer<typeof signupSchema>) {
 
     await updateProfile(user, { displayName: name });
 
+    // This operation is now allowed by the updated security rules
     await setDoc(doc(firestore, 'userProfiles', user.uid), {
       uid: user.uid,
       displayName: name,
@@ -110,36 +108,6 @@ export async function signup(values: z.infer<typeof signupSchema>) {
     return handleAuthError(error);
   }
 }
-
-async function socialSignIn(provider: GoogleAuthProvider | GithubAuthProvider) {
-    try {
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-
-        await setDoc(doc(firestore, 'userProfiles', user.uid), {
-            uid: user.uid,
-            displayName: user.displayName,
-            email: user.email,
-            photoURL: user.photoURL,
-        }, { merge: true });
-
-        return null;
-    } catch (error) {
-        return handleAuthError(error);
-    }
-}
-
-
-export async function signInWithGoogle() {
-    const provider = new GoogleAuthProvider();
-    return socialSignIn(provider);
-}
-
-export async function signInWithGithub() {
-    const provider = new GithubAuthProvider();
-    return socialSignIn(provider);
-}
-
 
 export async function signOut() {
   try {

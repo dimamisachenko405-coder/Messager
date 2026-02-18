@@ -6,14 +6,15 @@ import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { Github, Loader2, Lock, Mail } from 'lucide-react';
 import {
-  Github,
-  Loader2,
-  Lock,
-  Mail,
-  MessageSquare,
-} from 'lucide-react';
+  GoogleAuthProvider,
+  GithubAuthProvider,
+  signInWithPopup,
+} from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
+import { useAuth, useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -33,7 +34,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { login, signInWithGithub, signInWithGoogle } from '@/lib/actions';
+import { login } from '@/lib/actions';
 import Logo from '@/components/logo';
 
 const formSchema = z.object({
@@ -44,25 +45,27 @@ const formSchema = z.object({
 });
 
 const GoogleIcon = () => (
-    <svg
-      role="img"
-      viewBox="0 0 24 24"
-      xmlns="http://www.w3.org/2000/svg"
-      className="size-4"
-    >
-      <title>Google</title>
-      <path
-        d="M12.48 10.92v3.28h7.84c-.24 1.84-.85 3.18-1.73 4.1-1.05 1.05-2.86 2.25-5.02 2.25-4.55 0-8.23-3.73-8.23-8.29s3.68-8.29 8.23-8.29c2.49 0 4.09.98 5.27 2.05l2.6-2.58C18.07.73 15.49 0 12.48 0 5.88 0 .42 5.51.42 12.3s5.46 12.3 12.06 12.3c3.42 0 6.17-1.12 8.22-3.21 2.1-2.1 2.85-5.05 2.85-8.22 0-.75-.08-1.48-.21-2.18h-10.6z"
-        fill="currentColor"
-      />
-    </svg>
-  );
+  <svg
+    role="img"
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+    className="size-4"
+  >
+    <title>Google</title>
+    <path
+      d="M12.48 10.92v3.28h7.84c-.24 1.84-.85 3.18-1.73 4.1-1.05 1.05-2.86 2.25-5.02 2.25-4.55 0-8.23-3.73-8.23-8.29s3.68-8.29 8.23-8.29c2.49 0 4.09.98 5.27 2.05l2.6-2.58C18.07.73 15.49 0 12.48 0 5.88 0 .42 5.51.42 12.3s5.46 12.3 12.06 12.3c3.42 0 6.17-1.12 8.22-3.21 2.1-2.1 2.85-5.05 2.85-8.22 0-.75-.08-1.48-.21-2.18h-10.6z"
+      fill="currentColor"
+    />
+  </svg>
+);
 
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<null | 'google' | 'github'>(null);
+  const auth = useAuth();
+  const firestore = useFirestore();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -92,27 +95,67 @@ export default function LoginPage() {
     setLoading(false);
   }
 
-  async function handleSocialLogin(provider: 'google' | 'github') {
-    setSocialLoading(provider);
-    let error;
-    if (provider === 'google') {
-        error = await signInWithGoogle();
-    } else {
-        error = await signInWithGithub();
+  async function handleSocialLogin(providerName: 'google' | 'github') {
+    setSocialLoading(providerName);
+    const provider =
+      providerName === 'google'
+        ? new GoogleAuthProvider()
+        : new GithubAuthProvider();
+
+    if (!auth || !firestore) {
+      toast({
+        title: 'Initialization Error',
+        description: 'Firebase is not ready. Please try again in a moment.',
+        variant: 'destructive',
+      });
+      setSocialLoading(null);
+      return;
     }
 
-    if(error) {
-        toast({
-            title: `Error with ${provider} login`,
-            description: error,
-            variant: 'destructive',
-        });
-    } else {
-        router.push('/chat');
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // Create or update user profile in Firestore
+      await setDoc(
+        doc(firestore, 'userProfiles', user.uid),
+        {
+          uid: user.uid,
+          displayName: user.displayName,
+          email: user.email,
+          photoURL: user.photoURL,
+        },
+        { merge: true },
+      );
+
+      router.push('/chat');
+    } catch (error: any) {
+      let description = 'An unexpected error occurred. Please try again.';
+      // Handle specific social login errors
+      switch (error.code) {
+        case 'auth/popup-closed-by-user':
+          description = 'The sign-in window was closed. Please try again.';
+          break;
+        case 'auth/account-exists-with-different-credential':
+          description =
+            'An account with this email already exists using a different sign-in method.';
+          break;
+        case 'auth/popup-blocked':
+          description =
+            'The sign-in popup was blocked by your browser. Please allow popups for this site.';
+          break;
+        default:
+          description = error.message;
+      }
+      toast({
+        title: `Error with ${providerName} login`,
+        description,
+        variant: 'destructive',
+      });
+    } finally {
+      setSocialLoading(null);
     }
-    setSocialLoading(null);
   }
-
 
   return (
     <div className="flex min-h-screen w-full items-center justify-center p-4">
@@ -187,12 +230,28 @@ export default function LoginPage() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Button variant="outline" onClick={() => handleSocialLogin('google')} disabled={!!socialLoading}>
-              {socialLoading === 'google' ? <Loader2 className="mr-2 size-4 animate-spin"/> : <GoogleIcon />}
+            <Button
+              variant="outline"
+              onClick={() => handleSocialLogin('google')}
+              disabled={!!socialLoading}
+            >
+              {socialLoading === 'google' ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <GoogleIcon />
+              )}
               Google
             </Button>
-            <Button variant="outline" onClick={() => handleSocialLogin('github')} disabled={!!socialLoading}>
-              {socialLoading === 'github' ? <Loader2 className="mr-2 size-4 animate-spin"/> : <Github className="mr-2 size-4"/>}
+            <Button
+              variant="outline"
+              onClick={() => handleSocialLogin('github')}
+              disabled={!!socialLoading}
+            >
+              {socialLoading === 'github' ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Github className="mr-2 size-4" />
+              )}
               GitHub
             </Button>
           </div>
