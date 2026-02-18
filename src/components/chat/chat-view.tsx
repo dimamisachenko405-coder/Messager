@@ -8,6 +8,10 @@ import {
   onSnapshot,
   orderBy,
   query,
+  addDoc,
+  setDoc,
+  serverTimestamp,
+  type Timestamp,
 } from 'firebase/firestore';
 import {
   ArrowLeft,
@@ -23,9 +27,7 @@ import type { Message, UserProfile } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { sendMessage } from '@/lib/actions';
 import { cn } from '@/lib/utils';
 import SmartReplies from './smart-replies';
 import { useSidebar } from '../ui/sidebar';
@@ -78,6 +80,9 @@ export default function ChatView({ chatId }: ChatViewProps) {
       );
       setMessages(msgs);
       setLoading(false);
+    }, (error) => {
+      console.error("Error fetching messages:", error);
+      setLoading(false);
     });
 
     return () => {
@@ -92,9 +97,39 @@ export default function ChatView({ chatId }: ChatViewProps) {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageText.trim() || !user) return;
-    await sendMessage(chatId, user.uid, messageText);
+    if (!messageText.trim() || !user || !firestore) return;
+
+    const currentMessageText = messageText;
     setMessageText('');
+
+    try {
+      const chatRef = doc(firestore, 'chats', chatId);
+      const messagesCol = collection(chatRef, 'messages');
+
+      // This is crucial for security rules and for the chat to be "joinable".
+      const userIds = chatId.split('_');
+      await setDoc(chatRef, {
+        id: chatId,
+        participantIds: userIds,
+      }, { merge: true });
+
+      // Add the new message to the messages subcollection.
+      await addDoc(messagesCol, {
+        senderId: user.uid,
+        text: currentMessageText,
+        createdAt: serverTimestamp() as Timestamp,
+      });
+
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast({
+        title: 'Error sending message',
+        description: 'Could not send your message. Please try again.',
+        variant: 'destructive',
+      });
+      // Restore the message text if sending failed
+      setMessageText(currentMessageText);
+    }
   };
 
   const handleSuggestionClick = (suggestion: string) => {

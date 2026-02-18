@@ -8,12 +8,9 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import {
-  addDoc,
-  collection,
   doc,
   serverTimestamp,
   setDoc,
-  Timestamp,
 } from 'firebase/firestore';
 import { z } from 'zod';
 import { auth, firestore } from '@/firebase/server';
@@ -117,25 +114,5 @@ export async function signOut() {
   } catch (error) {
     console.error('Error signing out:', error);
     return 'Failed to sign out.';
-  }
-}
-
-export async function sendMessage(
-  chatId: string,
-  senderId: string,
-  messageText: string,
-) {
-  if (!messageText.trim()) return;
-
-  try {
-    const messagesCol = collection(firestore, 'chats', chatId, 'messages');
-    await addDoc(messagesCol, {
-      senderId,
-      text: messageText,
-      createdAt: serverTimestamp() as Timestamp,
-    });
-  } catch (error) {
-    console.error('Error sending message:', error);
-    // Optionally return an error message to be displayed in a toast
   }
 }
