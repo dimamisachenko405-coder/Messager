@@ -1,0 +1,324 @@
+{
+  "entities": {
+    "UserProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserProfile",
+      "type": "object",
+      "description": "Represents a user's profile within the ChattyNext messenger application, storing public-facing information.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the UserProfile entity."
+        },
+        "username": {
+          "type": "string",
+          "description": "The user's chosen display name, which must be unique."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address, primarily for communication and account recovery (not for authentication system data).",
+          "format": "email"
+        },
+        "profilePictureUrl": {
+          "type": "string",
+          "description": "URL to the user's profile image.",
+          "format": "uri"
+        },
+        "statusMessage": {
+          "type": "string",
+          "description": "A short, user-defined status message (e.g., 'Available', 'Busy')."
+        },
+        "lastActive": {
+          "type": "string",
+          "description": "Timestamp indicating the user's last known activity within the application.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "username",
+        "email",
+        "lastActive"
+      ]
+    },
+    "Contact": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Contact",
+      "type": "object",
+      "description": "Represents a relationship where one user adds another user to their contact list. This entity manages the contact list feature.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Contact relationship."
+        },
+        "ownerUserId": {
+          "type": "string",
+          "description": "Reference to the UserProfile ID of the user who owns this contact entry. (Relationship: UserProfile 1:N Contact)"
+        },
+        "contactUserId": {
+          "type": "string",
+          "description": "Reference to the UserProfile ID of the user who is being added as a contact by the ownerUser. (Relationship: UserProfile 1:N Contact)"
+        },
+        "blocked": {
+          "type": "boolean",
+          "description": "Indicates if the ownerUserId has blocked the contactUserId."
+        },
+        "addedAt": {
+          "type": "string",
+          "description": "Timestamp when this contact relationship was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ownerUserId",
+        "contactUserId",
+        "blocked",
+        "addedAt"
+      ]
+    },
+    "Chat": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Chat",
+      "type": "object",
+      "description": "Represents a conversation or group chat between multiple users.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Chat entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the chat, relevant for group chats. For individual chats, it might be derived from participant names."
+        },
+        "type": {
+          "type": "string",
+          "description": "The type of chat, either 'individual' for one-on-one conversations or 'group' for multiple participants.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "participantIds": {
+          "type": "array",
+          "description": "An array of UserProfile IDs representing all participants in this chat. (Relationship: UserProfile N:N Chat)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the chat was created.",
+          "format": "date-time"
+        },
+        "lastMessageId": {
+          "type": "string",
+          "description": "Reference to the ID of the most recent message sent in this chat, for quick access to the latest communication. (Relationship: Chat 1:N Message, but referencing last message from Chat)"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "participantIds",
+        "createdAt"
+      ]
+    },
+    "Message": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Message",
+      "type": "object",
+      "description": "Represents a single text or multimedia message sent within a chat.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Message entity."
+        },
+        "chatId": {
+          "type": "string",
+          "description": "Reference to the Chat ID this message belongs to. (Relationship: Chat 1:N Message)"
+        },
+        "senderId": {
+          "type": "string",
+          "description": "Reference to the UserProfile ID of the user who sent this message. (Relationship: UserProfile 1:N Message)"
+        },
+        "content": {
+          "type": "string",
+          "description": "The text content of the message. This field can be empty if the message only contains attachments."
+        },
+        "sentAt": {
+          "type": "string",
+          "description": "Timestamp when the message was sent.",
+          "format": "date-time"
+        },
+        "isRead": {
+          "type": "boolean",
+          "description": "Indicates if the message has been read by the current user or all recipients (simplified)."
+        },
+        "attachmentIds": {
+          "type": "array",
+          "description": "An array of Attachment IDs if the message includes multimedia files. (Relationship: Message N:N Attachment)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "suggestedReply": {
+          "type": "string",
+          "description": "An AI-suggested reply based on the message content, enhancing user convenience as part of the GenAI feature."
+        }
+      },
+      "required": [
+        "id",
+        "chatId",
+        "senderId",
+        "sentAt",
+        "isRead"
+      ]
+    },
+    "Attachment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Attachment",
+      "type": "object",
+      "description": "Represents a multimedia file (e.g., image, video) attached to a message.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Attachment entity."
+        },
+        "messageId": {
+          "type": "string",
+          "description": "Reference to the Message ID this attachment belongs to. An attachment belongs to exactly one message. (Relationship: Message 1:N Attachment)"
+        },
+        "fileUrl": {
+          "type": "string",
+          "description": "URL where the multimedia file is stored.",
+          "format": "uri"
+        },
+        "fileType": {
+          "type": "string",
+          "description": "The MIME type of the file (e.g., 'image/jpeg', 'video/mp4')."
+        },
+        "thumbnailUrl": {
+          "type": "string",
+          "description": "URL to a thumbnail image, useful for previewing videos or large images.",
+          "format": "uri"
+        },
+        "fileSize": {
+          "type": "number",
+          "description": "The size of the file in bytes."
+        },
+        "uploadedAt": {
+          "type": "string",
+          "description": "Timestamp when the attachment was uploaded.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "messageId",
+        "fileUrl",
+        "fileType",
+        "uploadedAt"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/userProfiles/{userId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "Stores public-facing information for each user. User's ID (UID) matches the document ID. Users can manage their own profile, while other users can read. This path provides a direct access point for user discovery and profile management."
+        }
+      },
+      {
+        "path": "/userProfiles/{ownerUserId}/contacts/{contactId}",
+        "definition": {
+          "entityName": "Contact",
+          "schema": {
+            "$ref": "#/backend/entities/Contact"
+          },
+          "description": "Represents a user's contact list entries. Each document signifies that `ownerUserId` has `contactUserId` in their contacts. This hierarchical structure ensures path-based ownership for `ownerUserId` and simplifies security rules. The `ownerUserId` in the path ensures authorization independence for this subcollection.",
+          "params": [
+            {
+              "name": "ownerUserId",
+              "description": "The UserProfile ID of the user who owns this contact entry. Corresponds to `request.auth.uid` for write operations."
+            },
+            {
+              "name": "contactId",
+              "description": "The unique identifier for the contact relationship document."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/chats/{chatId}",
+        "definition": {
+          "entityName": "Chat",
+          "schema": {
+            "$ref": "#/backend/entities/Chat"
+          },
+          "description": "Stores information for individual and group chats. Authorization depends on the `participantIds` array within the document, which acts as a denormalized membership map. This enables authorization independence without requiring `get()` calls in security rules and supports QAPs for listing user's chats.",
+          "params": [
+            {
+              "name": "chatId",
+              "description": "The unique identifier for the chat conversation."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/chats/{chatId}/messages/{messageId}",
+        "definition": {
+          "entityName": "Message",
+          "schema": {
+            "$ref": "#/backend/entities/Message"
+          },
+          "description": "Stores individual messages sent within a specific chat. For authorization independence, each message document must include denormalized `chatParticipantIds` (copied from the parent chat document) to enable direct access checks by security rules.",
+          "params": [
+            {
+              "name": "chatId",
+              "description": "The unique identifier of the parent chat."
+            },
+            {
+              "name": "messageId",
+              "description": "The unique identifier for the message."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/chats/{chatId}/messages/{messageId}/attachments/{attachmentId}",
+        "definition": {
+          "entityName": "Attachment",
+          "schema": {
+            "$ref": "#/backend/entities/Attachment"
+          },
+          "description": "Stores details about multimedia attachments linked to a specific message. For authorization independence, each attachment document must include denormalized `chatId` and `chatParticipantIds` (copied from the parent chat document) to enable direct access checks by security rules.",
+          "params": [
+            {
+              "name": "chatId",
+              "description": "The unique identifier of the grandparent chat."
+            },
+            {
+              "name": "messageId",
+              "description": "The unique identifier of the parent message."
+            },
+            {
+              "name": "attachmentId",
+              "description": "The unique identifier for the attachment."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure for ChattyNext prioritizes security, scalability, and debuggability by adhering to the core design principles and strategy mandates. \n\n**Authorization Independence (CRITICAL) & Denormalization:**\n\n*   **User Profiles:** Stored in `/userProfiles/{userId}`. Authorization is path-based: `request.auth.uid` must match `{userId}` for write operations. Read access is generally public for user discovery, ensuring simplicity and no reliance on parent documents.\n*   **Contacts:** Stored as a subcollection under the owning user's profile: `/userProfiles/{ownerUserId}/contacts/{contactId}`. The `ownerUserId` is directly present in the path, making authorization trivial (`request.auth.uid == ownerUserId`). The `Contact` document itself also contains `ownerUserId` for data integrity, but the path is sufficient for rules.\n*   **Chats:** Stored in a top-level collection `/chats/{chatId}`. Chats are collaborative, so authorization depends on the `participantIds` array within the `Chat` document. This array acts as a denormalized membership map, allowing rules to directly check `request.auth.uid in resource.data.participantIds` without any `get()` calls.\n*   **Messages & Attachments:** Nested hierarchically under their respective chats: `/chats/{chatId}/messages/{messageId}` and `/chats/{chatId}/messages/{messageId}/attachments/{attachmentId}`. To achieve **Authorization Independence**, the critical authorization context (the `participantIds` from the parent `Chat` document) **must be denormalized** into every `Message` and `Attachment` document. Specifically:\n    *   Each `Message` document will include a `chatParticipantIds` field (a copy of the parent chat's `participantIds`). Rules will check `request.auth.uid in resource.data.chatParticipantIds`.\n    *   Each `Attachment` document will include its `chatId` and `chatParticipantIds` field (a copy of the parent chat's `participantIds`). Rules will check `request.auth.uid in resource.data.chatParticipantIds`.\n    This denormalization is crucial for eliminating `get()` calls in security rules, making rules atomic, faster, more robust, and easier to debug, as each document carries its own authorization context.\n\n**QAPs (Rules are not Filters):**\n\n*   **User Profiles:** Listing user profiles for search is supported. Rules ensure only authorized users can modify their own profiles while allowing public read for discovery.\n*   **Contacts:** A user can securely list their own contacts by querying `/userProfiles/{request.auth.uid}/contacts`. The path structure naturally filters results to the authenticated user's data.\n*   **Chats:** Users can list all chats they are a participant of by querying `/chats` with a `where` clause on the `participantIds` array (e.g., `participantIds array-contains request.auth.uid`). This leverages Firestore's indexing capabilities for efficient and secure list operations.\n*   **Messages & Attachments:** Within a specific chat, messages and attachments can be listed. The denormalized `chatParticipantIds` in each document allows security rules to enforce that only chat participants can read/write these subcollections, supporting secure list operations efficiently without filtering at the rule level.\n\n**Structural Segregation & Access Modeling:**\n\n*   `UserProfile` provides public/discoverable data for all users.\n*   `Contact` data is strictly private and user-owned, segregated under the respective user's path.\n*   `Chat`, `Message`, `Attachment` represent collaborative data, where access is governed by membership, consistently using the `participantIds` denormalization pattern.\n*   Consistent naming conventions like `userId`, `chatId`, `messageId`, `ownerUserId` improve clarity and predictability.\n\nThis design ensures that security rules are straightforward to write and reason about, as access is determined by explicit fields within the document or directly from the document's path, rather than complex lookups or hierarchical dependencies."
+  }
+}

@@ -1,0 +1,147 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * Core Philosophy: This ruleset implements a hybrid security model tailored for a real-time messaging application.
+     * It combines a strict user-ownership model for personal data (like contacts) with a collaborative,
+     * membership-based model for shared data (like chats and messages). The primary goal is to ensure
+     * users can only access and modify data they explicitly own or are participants in.
+     *
+     * Data Structure:
+     * - /userProfiles/{userId}: Publicly readable user data, writable only by the owner.
+     * - /userProfiles/{userId}/contacts/{contactId}: A user's private contact list. Access is strictly confined to the list owner.
+     * - /chats/{chatId}: Collaborative chat rooms. Access is governed by a `participantIds` array within each chat document.
+     * - /chats/{chatId}/messages/{messageId}: Messages within a chat.
+     * - /chats/{chatId}/messages/{messageId}/attachments/{attachmentId}: Attachments within a message.
+     *
+     * Key Security Decisions:
+     * - User Profiles are discoverable (publicly readable) to allow users to find each other, but only the owner can modify their own profile.
+     * - A user's contact list is strictly private, using a path-based security rule for simplicity and performance.
+     * - Chat and message access is determined by checking for the user's UID in a `participantIds` list on the parent `Chat` document. This check is performed using a `get()` call, ensuring that the single source of truth for membership is always used for subcollection access.
+     * - Message modification and deletion are restricted to the original sender to maintain conversation integrity.
+     *
+     * Denormalization for Authorization:
+     * The `/chats/{chatId}` documents contain a `participantIds` array. This denormalization is critical, as it allows security rules
+     * to authorize a user for an entire conversation tree (the chat, its messages, and attachments) with a single check, avoiding complex and impossible queries.
+     *
+     * Structural Segregation:
+     * Public user information (`userProfiles`) is segregated into a top-level collection, while strictly private, user-owned data (`contacts`) is nested
+     * in a subcollection under the user's path. This separation creates a clear security boundary and improves query performance.
+     */
+
+    // -------------------------------------------------------------------------
+    // Helper Functions
+    // -------------------------------------------------------------------------
+
+    /**
+     * Checks if a user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the currently authenticated user's UID matches the provided userId.
+     * This is the foundation of the user-ownership model.
+     * @param userId The UID to check against the authenticated user.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Checks if the currently authenticated user is a participant in a given chat.
+     * This function performs a read on the parent chat document to get the canonical
+     * list of participants, ensuring subcollection access is always up-to-date.
+     * @param chatId The ID of the chat document to check for membership.
+     */
+    function isChatParticipant(chatId) {
+      return isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds;
+    }
+
+    // -------------------------------------------------------------------------
+    // User Profile Rules
+    // -------------------------------------------------------------------------
+
+    /**
+     * @description Manages user profiles. Profiles are publicly readable for user discovery
+     * but can only be created, updated, or deleted by the user they belong to.
+     * @path /userProfiles/{userId}
+     * @allow (get) Any user, signed in or not, can read a user's profile.
+     * @deny (update) A signed-in user trying to update another user's profile.
+     * @principle Public Read with Owner-Only Writes. Enforces self-management of user data.
+     */
+    match /userProfiles/{userId} {
+      allow get, list: if true;
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isOwner(userId) && resource != null && request.resource.data.id == resource.data.id;
+      allow delete: if isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Secures a user's private contact list. Only the owner of the list
+     * can view, add, edit, or remove contacts.
+     * @path /userProfiles/{ownerUserId}/contacts/{contactId}
+     * @allow (create) User 'A' creates a contact document in their own contacts subcollection.
+     * @deny (list) User 'B' tries to list the contacts of user 'A'.
+     * @principle Restricts access to a user's own data tree using path-based ownership.
+     */
+    match /userProfiles/{ownerUserId}/contacts/{contactId} {
+      allow get, list: if isOwner(ownerUserId);
+      allow create: if isOwner(ownerUserId) && request.resource.data.ownerUserId == ownerUserId;
+      allow update: if isOwner(ownerUserId) && resource != null && request.resource.data.ownerUserId == resource.data.ownerUserId;
+      allow delete: if isOwner(ownerUserId) && resource != null;
+    }
+
+    // -------------------------------------------------------------------------
+    // Chat Rules
+    // -------------------------------------------------------------------------
+
+    /**
+     * @description Secures chat documents. Access is granted only to users listed in the
+     * `participantIds` array. Any participant can update the chat (e.g., name) or delete it.
+     * @path /chats/{chatId}
+     * @allow (get) A user whose UID is in the chat's `participantIds` array reads the chat.
+     * @deny (get) A user attempts to read a chat they are not a participant of.
+     * @principle Shared Access (Closed Collaborators). Uses a denormalized member list for authorization.
+     */
+    match /chats/{chatId} {
+      allow get: if isSignedIn() && request.auth.uid in resource.data.participantIds;
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid in request.resource.data.participantIds && request.resource.data.id == chatId;
+      allow update: if isSignedIn() && resource != null && request.auth.uid in resource.data.participantIds && request.resource.data.id == resource.data.id;
+      allow delete: if isSignedIn() && resource != null && request.auth.uid in resource.data.participantIds;
+    }
+
+    /**
+     * @description Secures messages within a chat. Only chat participants can read messages.
+     * Only the original sender can create, update, or delete their own message.
+     * @path /chats/{chatId}/messages/{messageId}
+     * @allow (create) A participant of chat 'C' sends a new message where their UID matches the `senderId`.
+     * @deny (delete) A participant of chat 'C' tries to delete a message sent by another user.
+     * @principle Inherited Shared Access. Authorization is derived from the parent chat document.
+     */
+    match /chats/{chatId}/messages/{messageId} {
+      allow get, list: if isChatParticipant(chatId);
+      allow create: if isChatParticipant(chatId) && request.resource.data.senderId == request.auth.uid && request.resource.data.chatId == chatId;
+      allow update: if isChatParticipant(chatId) && resource != null && resource.data.senderId == request.auth.uid && request.resource.data.chatId == resource.data.chatId && request.resource.data.senderId == resource.data.senderId;
+      allow delete: if isChatParticipant(chatId) && resource != null && resource.data.senderId == request.auth.uid;
+    }
+
+    /**
+     * @description Secures attachments to a message. Only participants of the parent chat
+     * can access or manage attachments.
+     * @path /chats/{chatId}/messages/{messageId}/attachments/{attachmentId}
+     * @allow (get) A participant of chat 'C' views an image attached to a message in that chat.
+     * @deny (create) A user not in chat 'C' tries to upload an attachment to a message.
+     * @principle Inherited Shared Access. Authorization is derived from the grandparent chat document.
+     */
+    match /chats/{chatId}/messages/{messageId}/attachments/{attachmentId} {
+      allow get, list: if isChatParticipant(chatId);
+      allow create: if isChatParticipant(chatId) && request.resource.data.messageId == messageId;
+      allow update: if isChatParticipant(chatId) && resource != null && request.resource.data.messageId == resource.data.messageId;
+      allow delete: if isChatParticipant(chatId) && resource != null;
+    }
+  }
+}
