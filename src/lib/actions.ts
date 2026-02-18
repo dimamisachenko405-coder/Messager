@@ -4,6 +4,7 @@ import {
   createUserWithEmailAndPassword,
   GithubAuthProvider,
   GoogleAuthProvider,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
@@ -18,7 +19,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { z } from 'zod';
-import { auth, firestore } from './firebase';
+import { auth, firestore } from '@/firebase/server';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -44,6 +45,10 @@ async function handleAuthError(error: any): Promise<string> {
       return 'Password is too weak.';
     case 'auth/invalid-email':
       return 'Please enter a valid email address.';
+    case 'auth/api-key-not-valid':
+      return 'The API key is invalid. Please check your configuration.';
+    case 'auth/requests-to-this-api-are-blocked':
+      return 'Identity Toolkit API is not enabled. Please enable it in the Google Cloud console.';
     default:
       return error.message || 'An unexpected error occurred. Please try again.';
   }
@@ -80,9 +85,11 @@ export async function signup(values: z.infer<typeof signupSchema>) {
     );
     const user = userCredential.user;
 
+    await sendEmailVerification(user);
+
     await updateProfile(user, { displayName: name });
 
-    await setDoc(doc(firestore, 'users', user.uid), {
+    await setDoc(doc(firestore, 'userProfiles', user.uid), {
       uid: user.uid,
       displayName: name,
       email: user.email,
@@ -100,7 +107,7 @@ async function socialSignIn(provider: GoogleAuthProvider | GithubAuthProvider) {
         const result = await signInWithPopup(auth, provider);
         const user = result.user;
 
-        await setDoc(doc(firestore, 'users', user.uid), {
+        await setDoc(doc(firestore, 'userProfiles', user.uid), {
             uid: user.uid,
             displayName: user.displayName,
             email: user.email,

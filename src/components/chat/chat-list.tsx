@@ -10,7 +10,6 @@ import {
   Search,
 } from 'lucide-react';
 
-import { firestore } from '@/lib/firebase';
 import type { UserProfile } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -27,9 +26,11 @@ import {
   useSidebar,
 } from '../ui/sidebar';
 import { signOut } from '@/lib/actions';
+import { useFirestore } from '@/firebase';
+import { User } from 'firebase/auth';
 
 interface ChatListProps {
-  currentUser: UserProfile;
+  currentUser: User;
 }
 
 export default function ChatList({ currentUser }: ChatListProps) {
@@ -39,9 +40,11 @@ export default function ChatList({ currentUser }: ChatListProps) {
   const router = useRouter();
   const { setOpenMobile } = useSidebar();
   const params = useParams();
+  const firestore = useFirestore();
 
   useEffect(() => {
-    const q = query(collection(firestore, 'users'));
+    if (!firestore) return;
+    const q = query(collection(firestore, 'userProfiles'));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const usersData: UserProfile[] = [];
       querySnapshot.forEach((doc) => {
@@ -53,7 +56,7 @@ export default function ChatList({ currentUser }: ChatListProps) {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [currentUser.uid]);
+  }, [currentUser.uid, firestore]);
 
   const handleLogout = async () => {
     await signOut();

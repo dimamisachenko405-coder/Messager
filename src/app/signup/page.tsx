@@ -65,7 +65,8 @@ export default function SignupPage() {
     } else {
       toast({
         title: 'Account created!',
-        description: 'You have been successfully signed up.',
+        description:
+          'A verification email has been sent. Please check your inbox.',
       });
       router.push('/chat');
     }

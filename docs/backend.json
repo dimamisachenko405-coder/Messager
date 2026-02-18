@@ -6,9 +6,9 @@
       "type": "object",
       "description": "Represents a user's profile within the ChattyNext messenger application, storing public-facing information.",
       "properties": {
-        "id": {
+        "uid": {
           "type": "string",
-          "description": "Unique identifier for the UserProfile entity."
+          "description": "Unique identifier for the UserProfile entity, matches the Firebase Auth UID."
         },
         "username": {
           "type": "string",
@@ -35,7 +35,7 @@
         }
       },
       "required": [
-        "id",
+        "uid",
         "username",
         "email",
         "lastActive"

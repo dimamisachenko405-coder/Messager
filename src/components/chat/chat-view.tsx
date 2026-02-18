@@ -18,8 +18,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
-import { useAuth } from '@/hooks/use-auth';
-import { firestore } from '@/lib/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import type { Message, UserProfile } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -36,7 +35,8 @@ interface ChatViewProps {
 }
 
 export default function ChatView({ chatId }: ChatViewProps) {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
   const { toggleSidebar } = useSidebar();
@@ -49,7 +49,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!user || !chatId) return;
+    if (!user || !chatId || !firestore) return;
 
     const userIds = chatId.split('_');
     const otherUserId = userIds.find((id) => id !== user.uid);
@@ -59,7 +59,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
         return;
     }
 
-    const unsubUser = onSnapshot(doc(firestore, 'users', otherUserId), (doc) => {
+    const unsubUser = onSnapshot(doc(firestore, 'userProfiles', otherUserId), (doc) => {
       if (doc.exists()) {
         setOtherUser(doc.data() as UserProfile);
       } else {
@@ -84,7 +84,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
       unsubUser();
       unsubMessages();
     };
-  }, [chatId, user, router, toast]);
+  }, [chatId, user, router, toast, firestore]);
   
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
