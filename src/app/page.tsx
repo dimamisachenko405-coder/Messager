@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,7 +10,8 @@ import { Github, Loader2, Lock, Mail } from 'lucide-react';
 import {
   GoogleAuthProvider,
   GithubAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
@@ -63,7 +64,9 @@ export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<null | 'google' | 'github'>(null);
+  const [socialLoading, setSocialLoading] = useState<null | 'google' | 'github'>(
+    null,
+  );
   const auth = useAuth();
   const firestore = useFirestore();
 
@@ -74,6 +77,59 @@ export default function LoginPage() {
       password: '',
     },
   });
+
+  useEffect(() => {
+    if (!auth || !firestore) {
+      return;
+    }
+
+    const processRedirectResult = async () => {
+      // Set a loading indicator as we might be processing a redirect.
+      setSocialLoading('google'); // Can be any generic value
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          // User successfully signed in.
+          const user = result.user;
+
+          // Create or update user profile in Firestore
+          await setDoc(
+            doc(firestore, 'userProfiles', user.uid),
+            {
+              uid: user.uid,
+              displayName: user.displayName,
+              email: user.email,
+              photoURL: user.photoURL,
+            },
+            { merge: true },
+          );
+
+          router.push('/chat');
+        } else {
+          // No redirect result, so we're not in a redirect flow.
+          setSocialLoading(null);
+        }
+      } catch (error: any) {
+        let description = 'An unexpected error occurred. Please try again.';
+        switch (error.code) {
+          case 'auth/account-exists-with-different-credential':
+            description =
+              'An account with this email already exists using a different sign-in method.';
+            break;
+          default:
+            description = error.message;
+        }
+        toast({
+          title: `Error with social login`,
+          description,
+          variant: 'destructive',
+        });
+        setSocialLoading(null);
+      }
+    };
+
+    processRedirectResult();
+  }, [auth, firestore, router, toast]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setLoading(true);
@@ -102,7 +158,7 @@ export default function LoginPage() {
         ? new GoogleAuthProvider()
         : new GithubAuthProvider();
 
-    if (!auth || !firestore) {
+    if (!auth) {
       toast({
         title: 'Initialization Error',
         description: 'Firebase is not ready. Please try again in a moment.',
@@ -111,50 +167,8 @@ export default function LoginPage() {
       setSocialLoading(null);
       return;
     }
-
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      // Create or update user profile in Firestore
-      await setDoc(
-        doc(firestore, 'userProfiles', user.uid),
-        {
-          uid: user.uid,
-          displayName: user.displayName,
-          email: user.email,
-          photoURL: user.photoURL,
-        },
-        { merge: true },
-      );
-
-      router.push('/chat');
-    } catch (error: any) {
-      let description = 'An unexpected error occurred. Please try again.';
-      // Handle specific social login errors
-      switch (error.code) {
-        case 'auth/popup-closed-by-user':
-          description = 'The sign-in window was closed. Please try again.';
-          break;
-        case 'auth/account-exists-with-different-credential':
-          description =
-            'An account with this email already exists using a different sign-in method.';
-          break;
-        case 'auth/popup-blocked':
-          description =
-            'The sign-in popup was blocked by your browser. Please allow popups for this site.';
-          break;
-        default:
-          description = error.message;
-      }
-      toast({
-        title: `Error with ${providerName} login`,
-        description,
-        variant: 'destructive',
-      });
-    } finally {
-      setSocialLoading(null);
-    }
+    // This will navigate the user away; the useEffect will handle the result on return.
+    await signInWithRedirect(auth, provider);
   }
 
   return (
