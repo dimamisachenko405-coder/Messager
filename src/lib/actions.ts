@@ -3,7 +3,6 @@
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
-  signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   updateProfile,
 } from 'firebase/auth';
@@ -14,11 +13,6 @@ import {
 } from 'firebase/firestore';
 import { z } from 'zod';
 import { auth, firestore } from '@/firebase/server';
-
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-});
 
 const signupSchema = z.object({
   name: z.string().min(2),
@@ -45,32 +39,6 @@ async function handleAuthError(error: any): Promise<string> {
       return 'Identity Toolkit API is not enabled. Please enable it in the Google Cloud console.';
     default:
       return error.message || 'An unexpected error occurred. Please try again.';
-  }
-}
-
-export async function login(values: z.infer<typeof loginSchema>) {
-  try {
-    const validated = loginSchema.safeParse(values);
-    if (!validated.success) {
-      return 'Invalid input.';
-    }
-    const userCredential = await signInWithEmailAndPassword(
-      auth,
-      validated.data.email,
-      validated.data.password,
-    );
-
-    if (!userCredential.user.emailVerified) {
-      // Resend verification email as a courtesy
-      await sendEmailVerification(userCredential.user);
-      // Sign the user out because they are not verified
-      await firebaseSignOut(auth);
-      return 'Please verify your email to log in. A new verification link has been sent to your inbox.';
-    }
-
-    return null;
-  } catch (error) {
-    return handleAuthError(error);
   }
 }
 

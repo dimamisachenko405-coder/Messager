@@ -12,10 +12,12 @@ import {
   GithubAuthProvider,
   signInWithRedirect,
   getRedirectResult,
+  signInWithEmailAndPassword,
+  sendEmailVerification,
 } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 
-import { useAuth, useFirestore } from '@/firebase';
+import { useAuth, useFirestore, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -35,7 +37,6 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { login } from '@/lib/actions';
 import Logo from '@/components/logo';
 
 const formSchema = z.object({
@@ -60,6 +61,28 @@ const GoogleIcon = () => (
   </svg>
 );
 
+const handleAuthError = (error: any): string => {
+  switch (error.code) {
+    case 'auth/user-not-found':
+      return 'No user found with this email.';
+    case 'auth/wrong-password':
+      return 'Incorrect password.';
+    case 'auth/email-already-in-use':
+      return 'This email is already in use.';
+    case 'auth/weak-password':
+      return 'Password is too weak.';
+    case 'auth/invalid-email':
+      return 'Please enter a valid email address.';
+    case 'auth/api-key-not-valid':
+      return 'The API key is invalid. Please check your configuration.';
+    case 'auth/requests-to-this-api-are-blocked':
+      return 'Identity Toolkit API is not enabled. Please enable it in the Google Cloud console.';
+    default:
+      return error.message || 'An unexpected error occurred. Please try again.';
+  }
+};
+
+
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -69,6 +92,7 @@ export default function LoginPage() {
   );
   const auth = useAuth();
   const firestore = useFirestore();
+  const { user, isUserLoading } = useUser();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -79,20 +103,22 @@ export default function LoginPage() {
   });
 
   useEffect(() => {
+    if (!isUserLoading && user) {
+      router.push('/chat');
+    }
+  }, [user, isUserLoading, router]);
+
+  useEffect(() => {
     if (!auth || !firestore) {
       return;
     }
 
     const processRedirectResult = async () => {
-      // Set a loading indicator as we might be processing a redirect.
-      setSocialLoading('google'); // Can be any generic value
+      setSocialLoading('google'); // Generic loading state
       try {
         const result = await getRedirectResult(auth);
         if (result) {
-          // User successfully signed in.
           const user = result.user;
-
-          // Create or update user profile in Firestore
           await setDoc(
             doc(firestore, 'userProfiles', user.uid),
             {
@@ -104,25 +130,14 @@ export default function LoginPage() {
             },
             { merge: true },
           );
-
           router.push('/chat');
         } else {
-          // No redirect result, so we're not in a redirect flow.
           setSocialLoading(null);
         }
       } catch (error: any) {
-        let description = 'An unexpected error occurred. Please try again.';
-        switch (error.code) {
-          case 'auth/account-exists-with-different-credential':
-            description =
-              'An account with this email already exists using a different sign-in method.';
-            break;
-          default:
-            description = error.message;
-        }
         toast({
           title: `Error with social login`,
-          description,
+          description: handleAuthError(error),
           variant: 'destructive',
         });
         setSocialLoading(null);
@@ -134,22 +149,47 @@ export default function LoginPage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setLoading(true);
-    const error = await login(values);
-
-    if (error) {
+    if (!auth) {
       toast({
-        title: 'Error logging in',
-        description: error,
+        title: 'Error',
+        description: 'Firebase not initialized.',
         variant: 'destructive',
       });
-    } else {
-      toast({
-        title: 'Success!',
-        description: 'You have been logged in.',
-      });
-      router.push('/chat');
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+    
+    try {
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        values.email,
+        values.password,
+      );
+      
+      if (!userCredential.user.emailVerified) {
+        await sendEmailVerification(userCredential.user);
+        await auth.signOut();
+        toast({
+          title: 'Verification Required',
+          description: 'Please verify your email to log in. A new verification link has been sent.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Success!',
+          description: 'You have been logged in.',
+        });
+        router.push('/chat');
+      }
+    } catch (error) {
+      toast({
+        title: 'Error logging in',
+        description: handleAuthError(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSocialLogin(providerName: 'google' | 'github') {
@@ -168,8 +208,15 @@ export default function LoginPage() {
       setSocialLoading(null);
       return;
     }
-    // This will navigate the user away; the useEffect will handle the result on return.
     await signInWithRedirect(auth, provider);
+  }
+
+  if (isUserLoading || user) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (
