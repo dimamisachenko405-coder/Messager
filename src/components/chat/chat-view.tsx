@@ -116,11 +116,11 @@ export default function ChatView({ chatId }: ChatViewProps) {
         {otherUser && (
           <>
             <Avatar>
-              <AvatarImage src={otherUser.photoURL || `https://avatar.vercel.sh/${otherUser.uid}.png`} />
-              <AvatarFallback>{otherUser.displayName?.[0]}</AvatarFallback>
+              <AvatarImage src={otherUser.profilePictureUrl || `https://avatar.vercel.sh/${otherUser.uid}.png`} />
+              <AvatarFallback>{otherUser.username?.[0]}</AvatarFallback>
             </Avatar>
             <div className="flex-1">
-              <p className="font-semibold">{otherUser.displayName}</p>
+              <p className="font-semibold">{otherUser.username}</p>
               <p className="text-xs text-muted-foreground">Online</p>
             </div>
           </>
@@ -133,16 +133,15 @@ export default function ChatView({ chatId }: ChatViewProps) {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message, index) => {
           const isCurrentUser = message.senderId === user?.uid;
-          const sender = isCurrentUser ? user : otherUser;
           return (
             <div
               key={message.id}
               className={cn('flex items-end gap-2', isCurrentUser ? 'justify-end' : 'justify-start')}
             >
-              {!isCurrentUser && (
+              {!isCurrentUser && otherUser && (
                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={sender?.photoURL || `https://avatar.vercel.sh/${sender?.uid}.png`} />
-                    <AvatarFallback>{sender?.displayName?.[0]}</AvatarFallback>
+                    <AvatarImage src={otherUser.profilePictureUrl || `https://avatar.vercel.sh/${otherUser.uid}.png`} />
+                    <AvatarFallback>{otherUser.username[0]}</AvatarFallback>
                 </Avatar>
               )}
               <div className={cn(
@@ -159,10 +158,10 @@ export default function ChatView({ chatId }: ChatViewProps) {
                     </p>
                 )}
               </div>
-                {isCurrentUser && (
+                {isCurrentUser && user && (
                     <Avatar className="h-8 w-8">
-                        <AvatarImage src={sender?.photoURL || `https://avatar.vercel.sh/${sender?.uid}.png`} />
-                        <AvatarFallback>{sender?.displayName?.[0]}</AvatarFallback>
+                        <AvatarImage src={user.photoURL || `https://avatar.vercel.sh/${user.uid}.png`} />
+                        <AvatarFallback>{user.displayName?.[0]}</AvatarFallback>
                     </Avatar>
                 )}
             </div>

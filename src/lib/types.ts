@@ -2,9 +2,10 @@ import type { Timestamp } from 'firebase/firestore';
 
 export type UserProfile = {
   uid: string;
-  email?: string | null;
-  displayName?: string | null;
-  photoURL?: string | null;
+  username: string;
+  email: string;
+  profilePictureUrl?: string | null;
+  lastActive: Timestamp;
 };
 
 export type Message = {

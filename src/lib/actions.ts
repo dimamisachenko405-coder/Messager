@@ -98,9 +98,10 @@ export async function signup(values: z.infer<typeof signupSchema>) {
     // This operation is now allowed by the updated security rules
     await setDoc(doc(firestore, 'userProfiles', user.uid), {
       uid: user.uid,
-      displayName: name,
-      email: user.email,
-      photoURL: user.photoURL,
+      username: name,
+      email: user.email!,
+      profilePictureUrl: user.photoURL,
+      lastActive: serverTimestamp(),
     });
 
     return null;

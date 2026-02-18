@@ -68,7 +68,7 @@ export default function ChatList({ currentUser }: ChatListProps) {
   };
 
   const filteredUsers = users.filter(user =>
-    user.displayName?.toLowerCase().includes(searchTerm.toLowerCase())
+    user.username?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -101,10 +101,10 @@ export default function ChatList({ currentUser }: ChatListProps) {
                   <Link href={`/chat/${chatId}`} className="w-full" onClick={() => setOpenMobile(false)}>
                     <SidebarMenuButton size="lg" isActive={params.chatId === chatId}>
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={user.photoURL || `https://avatar.vercel.sh/${user.uid}.png`} alt={user.displayName || 'User'} />
-                        <AvatarFallback>{user.displayName?.[0]}</AvatarFallback>
+                        <AvatarImage src={user.profilePictureUrl || `https://avatar.vercel.sh/${user.uid}.png`} alt={user.username || 'User'} />
+                        <AvatarFallback>{user.username?.[0]}</AvatarFallback>
                       </Avatar>
-                      <span>{user.displayName}</span>
+                      <span>{user.username}</span>
                     </SidebarMenuButton>
                   </Link>
                 </SidebarMenuItem>

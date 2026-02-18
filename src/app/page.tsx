@@ -13,7 +13,7 @@ import {
   signInWithRedirect,
   getRedirectResult,
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 
 import { useAuth, useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
@@ -97,9 +97,10 @@ export default function LoginPage() {
             doc(firestore, 'userProfiles', user.uid),
             {
               uid: user.uid,
-              displayName: user.displayName,
-              email: user.email,
-              photoURL: user.photoURL,
+              username: user.displayName || user.email!,
+              email: user.email!,
+              profilePictureUrl: user.photoURL,
+              lastActive: serverTimestamp(),
             },
             { merge: true },
           );
