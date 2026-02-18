@@ -60,11 +60,20 @@ export async function login(values: z.infer<typeof loginSchema>) {
     if (!validated.success) {
       return 'Invalid input.';
     }
-    await signInWithEmailAndPassword(
+    const userCredential = await signInWithEmailAndPassword(
       auth,
       validated.data.email,
       validated.data.password,
     );
+
+    if (!userCredential.user.emailVerified) {
+      // Resend verification email as a courtesy
+      await sendEmailVerification(userCredential.user);
+      // Sign the user out because they are not verified
+      await firebaseSignOut(auth);
+      return 'Please verify your email to log in. A new verification link has been sent to your inbox.';
+    }
+
     return null;
   } catch (error) {
     return handleAuthError(error);
