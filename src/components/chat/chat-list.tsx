@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Search,
 } from 'lucide-react';
+import { signOut } from 'firebase/auth';
 
 import type { UserProfile } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -25,8 +26,7 @@ import {
   SidebarMenuSkeleton,
   useSidebar,
 } from '../ui/sidebar';
-import { signOut } from '@/lib/actions';
-import { useFirestore } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
 import { User } from 'firebase/auth';
 
 interface ChatListProps {
@@ -41,6 +41,7 @@ export default function ChatList({ currentUser }: ChatListProps) {
   const { setOpenMobile } = useSidebar();
   const params = useParams();
   const firestore = useFirestore();
+  const auth = useAuth();
 
   useEffect(() => {
     if (!firestore) return;
@@ -59,7 +60,7 @@ export default function ChatList({ currentUser }: ChatListProps) {
   }, [currentUser.uid, firestore]);
 
   const handleLogout = async () => {
-    await signOut();
+    await signOut(auth);
     router.push('/');
   };
 
