@@ -61,33 +61,21 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // User Profile Rules
+    // User Profile Rules (Consolidated)
     // -------------------------------------------------------------------------
 
-    // This block secures individual user profile documents.
     match /userProfiles/{userId} {
-      // READ (get): Any authenticated user can 'get' a specific user profile.
-      // This is necessary for user discovery (e.g., viewing a contact's profile).
-      allow get: if isSignedIn();
-
-      // WRITE (create, update, delete): Only the user who owns the profile can write to it.
+      // Allow both 'get' (single profile) and 'list' (for searching the collection) for signed-in users.
+      allow read: if isSignedIn();
       
-      // CREATE: A user can only create their own profile, and the document ID must match their UID.
+      // CREATE: The document ID must match the user's UID.
       allow create: if isOwner(userId) && request.resource.data.uid == userId;
       
-      // UPDATE: A user can only update their own profile. They cannot change their UID.
+      // UPDATE: Only the owner can update, and the UID cannot be changed.
       allow update: if isOwner(userId) && request.resource.data.uid == resource.data.uid;
-      
-      // DELETE: A user can only delete their own profile.
+
+      // DELETE: Only the owner can delete.
       allow delete: if isOwner(userId);
-    }
-    
-    // This block secures the entire 'userProfiles' collection for query operations.
-    match /userProfiles {
-      // READ (list): Any authenticated user can 'list' the collection.
-      // This is CRITICAL for the user search/contact list feature to work.
-      // A 'list' operation is a query that reads multiple documents from a collection.
-      allow list: if isSignedIn();
     }
 
 
