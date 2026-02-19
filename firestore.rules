@@ -64,24 +64,25 @@ service cloud.firestore {
     // User Profile Rules
     // -------------------------------------------------------------------------
 
+    // Rule for accessing a SINGLE document in the 'userProfiles' collection.
     match /userProfiles/{userId} {
-      // Any authenticated user can view a profile. This is needed for user discovery.
+      // Any authenticated user can read ('get') a profile. This is for user discovery.
       allow get: if isSignedIn();
       
       // A user can only create their own profile document, and the document ID must match their UID.
       allow create: if isOwner(userId) && request.resource.data.uid == userId;
       
-      // A user can only update their own profile.
-      // They cannot change their UID.
+      // A user can only update their own profile, and they cannot change their assigned UID.
       allow update: if isOwner(userId) && request.resource.data.uid == resource.data.uid;
 
       // A user can only delete their own profile.
       allow delete: if isOwner(userId);
     }
     
-    // This allows authenticated users to query the 'userProfiles' collection,
-    // for example, to search for other users.
+    // Rule for querying the ENTIRE 'userProfiles' collection.
     match /userProfiles {
+      // Allow any signed-in user to query ('list') the collection.
+      // This is essential for the user search feature to work.
       allow list: if isSignedIn();
     }
 
