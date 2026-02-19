@@ -22,7 +22,7 @@ import {
   SidebarMenuSkeleton,
   useSidebar,
 } from '../ui/sidebar';
-import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useAuth, useCollection, useFirestore } from '@/firebase';
 import { User } from 'firebase/auth';
 
 interface ChatListProps {
@@ -37,7 +37,7 @@ export default function ChatList({ currentUser }: ChatListProps) {
   const firestore = useFirestore();
   const auth = useAuth();
 
-  const usersQuery = useMemoFirebase(() => {
+  const usersQuery = useMemo(() => {
     if (!firestore) return null;
 
     if (searchTerm.trim() === '') {
