@@ -64,20 +64,27 @@ service cloud.firestore {
     // User Profile Rules
     // -------------------------------------------------------------------------
 
-    /**
-     * @description Manages user profiles. Profiles are publicly readable for user discovery
-     * but can only be created, updated, or deleted by the user they belong to.
-     * @path /userProfiles/{userId}
-     * @allow (get) Any user, signed in or not, can read a user's profile.
-     * @deny (update) A signed-in user trying to update another user's profile.
-     * @principle Public Read with Owner-Only Writes. Enforces self-management of user data.
-     */
     match /userProfiles/{userId} {
-      allow get, list: if true;
-      allow create: if request.resource.data.uid == userId;
+      // Any authenticated user can view a profile. This is needed for user discovery.
+      allow get: if isSignedIn();
+      
+      // A user can only create their own profile document, and the document ID must match their UID.
+      allow create: if isOwner(userId) && request.resource.data.uid == userId;
+      
+      // A user can only update their own profile.
+      // They cannot change their UID.
       allow update: if isOwner(userId) && request.resource.data.uid == resource.data.uid;
+
+      // A user can only delete their own profile.
       allow delete: if isOwner(userId);
     }
+    
+    // This allows authenticated users to query the 'userProfiles' collection,
+    // for example, to search for other users.
+    match /userProfiles {
+      allow list: if isSignedIn();
+    }
+
 
     /**
      * @description Secures a user's private contact list. Only the owner of the list
