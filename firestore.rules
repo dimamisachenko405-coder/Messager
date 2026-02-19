@@ -64,25 +64,29 @@ service cloud.firestore {
     // User Profile Rules
     // -------------------------------------------------------------------------
 
-    // Rule for accessing a SINGLE document in the 'userProfiles' collection.
+    // This block secures individual user profile documents.
     match /userProfiles/{userId} {
-      // Any authenticated user can read ('get') a profile. This is for user discovery.
+      // READ (get): Any authenticated user can 'get' a specific user profile.
+      // This is necessary for user discovery (e.g., viewing a contact's profile).
       allow get: if isSignedIn();
+
+      // WRITE (create, update, delete): Only the user who owns the profile can write to it.
       
-      // A user can only create their own profile document, and the document ID must match their UID.
+      // CREATE: A user can only create their own profile, and the document ID must match their UID.
       allow create: if isOwner(userId) && request.resource.data.uid == userId;
       
-      // A user can only update their own profile, and they cannot change their assigned UID.
+      // UPDATE: A user can only update their own profile. They cannot change their UID.
       allow update: if isOwner(userId) && request.resource.data.uid == resource.data.uid;
-
-      // A user can only delete their own profile.
+      
+      // DELETE: A user can only delete their own profile.
       allow delete: if isOwner(userId);
     }
     
-    // Rule for querying the ENTIRE 'userProfiles' collection.
+    // This block secures the entire 'userProfiles' collection for query operations.
     match /userProfiles {
-      // Allow any signed-in user to query ('list') the collection.
-      // This is essential for the user search feature to work.
+      // READ (list): Any authenticated user can 'list' the collection.
+      // This is CRITICAL for the user search/contact list feature to work.
+      // A 'list' operation is a query that reads multiple documents from a collection.
       allow list: if isSignedIn();
     }
 
