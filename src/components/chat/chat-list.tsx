@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import {
   LogOut,
   MessageSquare,
@@ -45,19 +45,38 @@ export default function ChatList({ currentUser }: ChatListProps) {
 
   useEffect(() => {
     if (!firestore) return;
-    const q = query(collection(firestore, 'userProfiles'));
+    setLoading(true);
+
+    let q;
+    // If search term is empty, fetch all users.
+    // Otherwise, query users whose username starts with the search term.
+    if (searchTerm.trim() === '') {
+      q = query(collection(firestore, 'userProfiles'));
+    } else {
+      q = query(
+        collection(firestore, 'userProfiles'),
+        where('username', '>=', searchTerm),
+        where('username', '<=', searchTerm + '\uf8ff')
+      );
+    }
+    
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const usersData: UserProfile[] = [];
       querySnapshot.forEach((doc) => {
+        // Exclude current user from the list
         if (doc.data().uid !== currentUser.uid) {
           usersData.push(doc.data() as UserProfile);
         }
       });
       setUsers(usersData);
       setLoading(false);
+    }, (error) => {
+      console.error("Error fetching users:", error);
+      setLoading(false);
     });
+
     return () => unsubscribe();
-  }, [currentUser.uid, firestore]);
+  }, [currentUser.uid, firestore, searchTerm]); // Rerun effect when searchTerm changes
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -67,10 +86,6 @@ export default function ChatList({ currentUser }: ChatListProps) {
   const getChatId = (userId1: string, userId2: string) => {
     return [userId1, userId2].sort().join('_');
   };
-
-  const filteredUsers = users.filter(user =>
-    user.username?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
     <Sidebar>
@@ -95,7 +110,7 @@ export default function ChatList({ currentUser }: ChatListProps) {
           </div>
         ) : (
           <SidebarMenu>
-            {filteredUsers.map((user) => {
+            {users.map((user) => { // Use 'users' which is now the filtered list from Firestore
               const chatId = getChatId(currentUser.uid, user.uid);
               return (
                 <SidebarMenuItem key={user.uid}>
