@@ -1,9 +1,10 @@
 import ChatView from '@/components/chat/chat-view';
 
-export default function IndividualChatPage({
+export default async function IndividualChatPage({
   params,
 }: {
-  params: { chatId: string };
+  params: Promise<{ chatId: string }>;
 }) {
-  return <ChatView chatId={params.chatId} />;
+  const { chatId } = await params;
+  return <ChatView chatId={chatId} />;
 }
