@@ -29,7 +29,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import SmartReplies from './smart-replies';
 import { useSidebar } from '../ui/sidebar';
 
 interface ChatViewProps {
@@ -132,16 +131,10 @@ export default function ChatView({ chatId }: ChatViewProps) {
     }
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    setMessageText(suggestion);
-  }
-
   if (loading) {
     return <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
   
-  const lastMessageFromOtherUser = [...messages].reverse().find(m => m.senderId === otherUser?.uid);
-
   return (
     <div className="flex h-screen flex-col bg-card">
       <header className="flex items-center gap-3 border-b p-3">
@@ -206,12 +199,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
       </div>
 
       <div className="p-4 border-t">
-        <SmartReplies 
-          lastMessage={lastMessageFromOtherUser ?? null}
-          onSuggestionClick={handleSuggestionClick}
-          chatHistory={messages.map(m => `${m.senderId === user?.uid ? 'Me' : 'Them'}: ${m.text}`)}
-        />
-        <form onSubmit={handleSendMessage} className="flex items-center gap-2 mt-2">
+        <form onSubmit={handleSendMessage} className="flex items-center gap-2">
             <Button variant="ghost" size="icon">
                 <Paperclip className="h-5 w-5 text-muted-foreground" />
             </Button>
