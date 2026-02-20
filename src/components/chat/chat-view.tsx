@@ -117,6 +117,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
         senderId: user.uid,
         text: currentMessageText,
         createdAt: serverTimestamp() as Timestamp,
+        chatId: chatId,
       });
 
     } catch (error) {

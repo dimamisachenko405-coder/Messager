@@ -10,6 +10,7 @@ export type UserProfile = {
 
 export type Message = {
   id: string;
+  chatId: string;
   text?: string;
   imageUrl?: string;
   senderId: string;
