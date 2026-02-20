@@ -23,7 +23,7 @@ import {
   Check,
   CheckCheck,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
 
 import { useUser, useFirestore } from '@/firebase';
 import type { Message, UserProfile } from '@/lib/types';
@@ -35,6 +35,31 @@ import { cn } from '@/lib/utils';
 
 interface ChatViewProps {
   chatId: string;
+}
+
+// Function to format the last active timestamp
+function formatLastActive(timestamp: Timestamp): string {
+  if (!timestamp) return 'Unknown';
+  const date = timestamp.toDate();
+  const now = new Date();
+
+  // If last active was less than 5 minutes ago, show "Online"
+  if (now.getTime() - date.getTime() < 5 * 60 * 1000) {
+    return 'Online';
+  }
+  
+  // If it was today, show "last seen today at HH:mm"
+  if (isToday(date)) {
+    return `last seen today at ${format(date, 'HH:mm')}`;
+  }
+
+  // If it was yesterday, show "last seen yesterday at HH:mm"
+  if (isYesterday(date)) {
+    return `last seen yesterday at ${format(date, 'HH:mm')}`;
+  }
+
+  // Otherwise, show the relative time
+  return `last seen ${formatDistanceToNow(date, { addSuffix: true })}`;
 }
 
 export default function ChatView({ chatId }: ChatViewProps) {
@@ -147,6 +172,10 @@ export default function ChatView({ chatId }: ChatViewProps) {
         isRead: false,
       });
 
+      // Update the user's last active time
+      const userProfileRef = doc(firestore, 'userProfiles', user.uid);
+      await updateDoc(userProfileRef, { lastActive: serverTimestamp() });
+
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -176,7 +205,9 @@ export default function ChatView({ chatId }: ChatViewProps) {
             </Avatar>
             <div className="flex-1">
               <p className="font-semibold">{otherUser.username}</p>
-              <p className="text-xs text-muted-foreground">Online</p>
+              <p className="text-xs text-muted-foreground">
+                {formatLastActive(otherUser.lastActive)}
+              </p>
             </div>
           </>
         )}
