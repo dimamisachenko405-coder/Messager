@@ -15,10 +15,11 @@ export type Message = {
   imageUrl?: string;
   senderId: string;
   createdAt: Timestamp;
+  isRead: boolean;
 };
 
 export type Chat = {
   id: string;
-  users: string[];
+  participantIds: string[];
   lastMessage?: Message;
 };

@@ -11,6 +11,7 @@ import {
   addDoc,
   setDoc,
   serverTimestamp,
+  updateDoc,
   type Timestamp,
 } from 'firebase/firestore';
 import {
@@ -19,8 +20,10 @@ import {
   Paperclip,
   Send,
   MoreVertical,
+  Check,
+  CheckCheck,
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 
 import { useUser, useFirestore } from '@/firebase';
 import type { Message, UserProfile } from '@/lib/types';
@@ -91,6 +94,29 @@ export default function ChatView({ chatId }: ChatViewProps) {
       unsubMessages();
     };
   }, [chatId, user, router, toast, firestore]);
+
+  useEffect(() => {
+    if (!firestore || !user || messages.length === 0) return;
+
+    const markMessagesAsRead = async () => {
+      const unreadMessages = messages.filter(
+        (msg) => msg.senderId !== user.uid && !msg.isRead
+      );
+
+      if (unreadMessages.length === 0) return;
+
+      await Promise.all(
+        unreadMessages.map((msg) => {
+          const msgRef = doc(firestore, 'chats', chatId, 'messages', msg.id);
+          return updateDoc(msgRef, { isRead: true });
+        })
+      );
+    };
+
+    markMessagesAsRead().catch(error => {
+        console.error("Failed to mark messages as read:", error);
+    });
+}, [messages, firestore, user, chatId]);
   
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -107,19 +133,18 @@ export default function ChatView({ chatId }: ChatViewProps) {
       const chatRef = doc(firestore, 'chats', chatId);
       const messagesCol = collection(chatRef, 'messages');
 
-      // This is crucial for security rules and for the chat to be "joinable".
       const userIds = chatId.split('_');
       await setDoc(chatRef, {
         id: chatId,
         participantIds: userIds,
       }, { merge: true });
 
-      // Add the new message to the messages subcollection.
       await addDoc(messagesCol, {
         senderId: user.uid,
         text: currentMessageText,
         createdAt: serverTimestamp() as Timestamp,
         chatId: chatId,
+        isRead: false,
       });
 
     } catch (error) {
@@ -129,7 +154,6 @@ export default function ChatView({ chatId }: ChatViewProps) {
         description: 'Could not send your message. Please try again.',
         variant: 'destructive',
       });
-      // Restore the message text if sending failed
       setMessageText(currentMessageText);
     }
   };
@@ -162,7 +186,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message, index) => {
+        {messages.map((message) => {
           const isCurrentUser = message.senderId === user?.uid;
           return (
             <div
@@ -172,22 +196,30 @@ export default function ChatView({ chatId }: ChatViewProps) {
               {!isCurrentUser && otherUser && (
                  <Avatar className="h-8 w-8">
                     <AvatarImage src={otherUser.profilePictureUrl || `https://avatar.vercel.sh/${otherUser.uid}.png`} />
-                    <AvatarFallback>{otherUser.username[0]}</AvatarFallback>
+                    <AvatarFallback>{otherUser.username?.[0]}</AvatarFallback>
                 </Avatar>
               )}
               <div className={cn(
                   'max-w-xs md:max-w-md lg:max-w-lg rounded-lg px-3 py-2',
                   isCurrentUser ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-secondary text-secondary-foreground rounded-bl-none'
               )}>
-                <p className="text-sm">{message.text}</p>
-                 {message.createdAt && (
-                    <p className={cn(
-                        "text-xs mt-1",
-                        isCurrentUser ? "text-primary-foreground/70" : "text-muted-foreground"
-                    )}>
-                        {formatDistanceToNow(message.createdAt.toDate(), { addSuffix: true })}
-                    </p>
-                )}
+                <p className="text-sm break-words">{message.text}</p>
+                <div className={cn(
+                  "text-xs mt-1 flex items-center gap-1",
+                  isCurrentUser ? "text-primary-foreground/70 justify-end" : "text-muted-foreground justify-end"
+                )}>
+                  {message.createdAt && (
+                      <span>
+                          {format(message.createdAt.toDate(), 'HH:mm')}
+                      </span>
+                  )}
+                  {isCurrentUser &&
+                    (message.isRead ? (
+                      <CheckCheck className="h-4 w-4" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    ))}
+                </div>
               </div>
                 {isCurrentUser && user && (
                     <Avatar className="h-8 w-8">

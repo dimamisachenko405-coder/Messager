@@ -60,6 +60,19 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds;
     }
 
+    /**
+     * Returns a List of keys that were added, removed, or changed in an update operation.
+     * This is useful for restricting updates to specific fields.
+     */
+    function affectingKeys() {
+      let newKeys = request.resource.data.keys();
+      let oldKeys = resource.data.keys();
+      let addedKeys = newKeys.diff(oldKeys);
+      let removedKeys = oldKeys.diff(newKeys);
+      let changedKeys = newKeys.filter(k => request.resource.data[k] != resource.data[k]);
+      return addedKeys.concat(removedKeys).concat(changedKeys);
+    }
+
     // -------------------------------------------------------------------------
     // User Profile Rules (Consolidated)
     // -------------------------------------------------------------------------
@@ -125,8 +138,21 @@ service cloud.firestore {
     match /chats/{chatId}/messages/{messageId} {
       allow get, list: if isChatParticipant(chatId);
       allow create: if isChatParticipant(chatId) && request.resource.data.senderId == request.auth.uid && request.resource.data.chatId == chatId;
-      allow update: if isChatParticipant(chatId) && resource != null && resource.data.senderId == request.auth.uid && request.resource.data.chatId == resource.data.chatId && request.resource.data.senderId == resource.data.senderId;
-      allow delete: if isChatParticipant(chatId) && resource != null && resource.data.senderId == request.auth.uid;
+      
+      // UPDATE:
+      // Allow sender to update their own message (all fields).
+      // Allow a non-sender participant to update ONLY the `isRead` field to `true`.
+      allow update: if isChatParticipant(chatId) &&
+                      (
+                        (resource.data.senderId == request.auth.uid) ||
+                        (
+                          request.auth.uid != resource.data.senderId &&
+                          affectingKeys().hasOnly(['isRead']) &&
+                          request.resource.data.isRead == true
+                        )
+                      );
+                      
+      allow delete: if isChatParticipant(chatId) && resource.data.senderId == request.auth.uid;
     }
 
     /**

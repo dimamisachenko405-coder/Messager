@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, doc, getDoc } from 'firebase/firestore';
 import {
   LogOut,
   MessageSquare,
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 
-import type { UserProfile } from '@/lib/types';
+import type { UserProfile, Chat } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,8 @@ export default function ChatList({ currentUser }: ChatListProps) {
   const firestore = useFirestore();
   const auth = useAuth();
 
+  const [otherUsers, setOtherUsers] = useState<UserProfile[]>([]);
+
   const usersQuery = useMemo(() => {
     if (!firestore) return null;
 
@@ -47,21 +49,53 @@ export default function ChatList({ currentUser }: ChatListProps) {
   }, [firestore, searchTerm]);
 
   const {
-    data: allUsers,
+    data: searchedUsers,
     isLoading: loading,
     error,
   } = useCollection<UserProfile>(usersQuery);
 
   const users = useMemo(() => {
-    if (!allUsers) return [];
-    return allUsers.filter((user) => user.uid !== currentUser.uid);
-  }, [allUsers, currentUser.uid]);
+    if (!searchedUsers) return [];
+    return searchedUsers.filter((user) => user.uid !== currentUser.uid);
+  }, [searchedUsers, currentUser.uid]);
+
+  const chatsQuery = useMemo(() => {
+    if (!firestore) return null;
+    return query(
+      collection(firestore, 'chats'),
+      where('participantIds', 'array-contains', currentUser.uid)
+    );
+  }, [firestore, currentUser.uid]);
+
+  const { data: chats } = useCollection<Chat>(chatsQuery);
 
   useEffect(() => {
     if (error) {
       console.error('Error fetching users:', error);
     }
   }, [error]);
+
+  useEffect(() => {
+    if (!chats || !firestore) return;
+
+    const fetchOtherUsers = async () => {
+      const otherUserIds = chats
+        .map((chat) => chat.participantIds.find((id: string) => id !== currentUser.uid))
+        .filter((id) => id !== undefined) as string[];
+
+      const uniqueUserIds = [...new Set(otherUserIds)];
+
+      const usersData = await Promise.all(
+        uniqueUserIds.map(async (userId) => {
+          const userDoc = await getDoc(doc(firestore, 'userProfiles', userId));
+          return userDoc.data() as UserProfile;
+        })
+      );
+      setOtherUsers(usersData.filter(Boolean));
+    };
+
+    fetchOtherUsers();
+  }, [chats, firestore, currentUser.uid]);
 
   const handleLogout = async () => {
     if (auth) {
@@ -73,6 +107,8 @@ export default function ChatList({ currentUser }: ChatListProps) {
   const getChatId = (userId1: string, userId2: string) => {
     return [userId1, userId2].sort().join('_');
   };
+
+  const displayedUsers = searchTerm.trim() === '' ? otherUsers : users;
 
   return (
     <div className="flex flex-col h-full w-full bg-card">
@@ -98,9 +134,9 @@ export default function ChatList({ currentUser }: ChatListProps) {
           </div>
         ) : (
           <>
-            {users && users.length > 0 ? (
+            {displayedUsers && displayedUsers.length > 0 ? (
               <ul className="p-2 space-y-1">
-                {users.map((user) => {
+                {displayedUsers.map((user) => {
                   const chatId = getChatId(currentUser.uid, user.uid);
                   return (
                     <li key={user.uid}>
@@ -134,7 +170,7 @@ export default function ChatList({ currentUser }: ChatListProps) {
             ) : (
               <div className="p-4 text-center text-sm text-muted-foreground">
                 {searchTerm.trim() === ''
-                  ? 'Enter a username to search for contacts.'
+                  ? 'No recent chats. Search for a user to start a conversation.'
                   : 'No users found.'}
               </div>
             )}
