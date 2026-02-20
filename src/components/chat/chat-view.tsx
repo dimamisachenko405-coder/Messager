@@ -40,7 +40,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
   const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
-  const { toggleSidebar } = useSidebar();
+  const { toggleSidebar, isMobile } = useSidebar();
   
   const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -48,6 +48,14 @@ export default function ChatView({ chatId }: ChatViewProps) {
   const [messageText, setMessageText] = useState('');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const handleBack = () => {
+    if (isMobile) {
+      router.push('/chat');
+    } else {
+      toggleSidebar();
+    }
+  };
 
   useEffect(() => {
     if (!user || !chatId || !firestore) return;
@@ -139,7 +147,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
   return (
     <div className="flex h-screen flex-col bg-card">
       <header className="flex items-center gap-3 border-b p-3">
-        <Button variant="ghost" size="icon" className="md:hidden" onClick={toggleSidebar}>
+        <Button variant="ghost" size="icon" className="md:hidden" onClick={handleBack}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
         {otherUser && (
