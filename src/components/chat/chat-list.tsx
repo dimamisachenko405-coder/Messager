@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { collection, query, where, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, doc, getDoc, getDocs } from 'firebase/firestore';
 import {
   LogOut,
   MessageSquare,
@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth, useCollection, useFirestore } from '@/firebase';
 import { User } from 'firebase/auth';
 import { cn } from '@/lib/utils';
-import { useDrafts } from '@/context/drafts-context'; // Import the context hook
+import { useDrafts } from '@/context/drafts-context';
 
 interface ChatListProps {
   currentUser: User;
@@ -36,11 +36,14 @@ export default function ChatList({ currentUser }: ChatListProps) {
   const params = useParams();
   const firestore = useFirestore();
   const auth = useAuth();
-  const { drafts } = useDrafts(); // Use the context hook
-  const [chatListData, setChatListData] = useState<ChatWithUser[]>([]);
-  const [loadingChats, setLoadingChats] = useState(true);
+  const { drafts } = useDrafts();
 
-  // Search logic
+  // State for the initial loading of chats and users
+  const [isLoading, setIsLoading] = useState(true);
+  // State to cache user profiles to avoid re-fetching
+  const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>({});
+
+  // --- Search Logic ---
   const usersQuery = useMemo(() => {
     if (!firestore || searchTerm.trim() === '') return null;
     return query(
@@ -56,7 +59,8 @@ export default function ChatList({ currentUser }: ChatListProps) {
     return searchedUsers.filter((user) => user.uid !== currentUser.uid);
   }, [searchedUsers, currentUser.uid]);
 
-  // Chat list logic
+  // --- Chat List Logic ---
+  // 1. Fetch the user's chats in real-time
   const chatsQuery = useMemo(() => {
     if (!firestore) return null;
     return query(
@@ -67,39 +71,58 @@ export default function ChatList({ currentUser }: ChatListProps) {
 
   const { data: chats } = useCollection<Chat>(chatsQuery);
 
+  // 2. Effect to fetch and cache user profiles for the chats
   useEffect(() => {
     if (!chats || !firestore) return;
 
-    const fetchChatUsers = async () => {
-      setLoadingChats(true);
-      const chatsWithUsers = await Promise.all(
-        chats.map(async (chat) => {
-          const otherUserId = chat.participantIds.find(id => id !== currentUser.uid);
-          if (!otherUserId) return null;
+    const userIdsToFetch = chats
+      .map(chat => chat.participantIds.find(id => id !== currentUser.uid))
+      .filter((id): id is string => !!id && !userProfiles[id]);
 
-          const userDoc = await getDoc(doc(firestore, 'userProfiles', otherUserId));
-          if (!userDoc.exists()) return null;
-          
-          return {
-            ...chat,
-            otherUser: userDoc.data() as UserProfile
-          };
-        })
-      );
+    if (userIdsToFetch.length === 0) {
+      if (isLoading) setIsLoading(false); // All users are cached, stop initial load
+      return;
+    }
+
+    const fetchMissingUsers = async () => {
+      const uniqueIds = [...new Set(userIdsToFetch)];
+      const usersQuery = query(collection(firestore, 'userProfiles'), where('__name__', 'in', uniqueIds));
+      const userDocs = await getDocs(usersQuery);
       
-      const filteredAndSorted = (chatsWithUsers.filter(Boolean) as ChatWithUser[])
-        .sort((a, b) => {
-          const timeA = a.lastMessage?.createdAt?.toDate().getTime() || 0;
-          const timeB = b.lastMessage?.createdAt?.toDate().getTime() || 0;
-          return timeB - timeA;
-        });
+      const newProfiles: Record<string, UserProfile> = {};
+      userDocs.forEach(doc => {
+        newProfiles[doc.id] = doc.data() as UserProfile;
+      });
 
-      setChatListData(filteredAndSorted);
-      setLoadingChats(false);
+      if (Object.keys(newProfiles).length > 0) {
+        setUserProfiles(prev => ({ ...prev, ...newProfiles }));
+      }
+      if (isLoading) setIsLoading(false); // Fetched users, stop initial load
     };
 
-    fetchChatUsers();
-  }, [chats, firestore, currentUser.uid]);
+    fetchMissingUsers();
+
+  }, [chats, firestore, currentUser.uid, userProfiles, isLoading]);
+
+  // 3. Memo to combine chats with cached user profiles and sort them
+  const chatListData = useMemo(() => {
+    if (!chats) return [];
+
+    return (chats
+      .map(chat => {
+        const otherUserId = chat.participantIds.find(id => id !== currentUser.uid);
+        const otherUser = otherUserId ? userProfiles[otherUserId] : null;
+        if (!otherUser) return null; // Return null if user profile is not cached yet
+
+        return { ...chat, otherUser };
+      })
+      .filter(Boolean) as ChatWithUser[])
+      .sort((a, b) => {
+        const timeA = a.lastMessage?.createdAt?.toDate().getTime() || 0;
+        const timeB = b.lastMessage?.createdAt?.toDate().getTime() || 0;
+        return timeB - timeA;
+      });
+  }, [chats, userProfiles, currentUser.uid]);
 
   const handleLogout = async () => {
     if (auth) {
@@ -113,7 +136,10 @@ export default function ChatList({ currentUser }: ChatListProps) {
   };
 
   const renderChatList = () => {
-    if (chatListData.length === 0) {
+    // Note: We don't check for chatListData.length === 0 here anymore for the "No recent chats" message,
+    // because on initial load it will be 0. The global loading indicator handles this.
+    // Once loading is false, if it's still 0, then we show the message.
+    if (chatListData.length === 0 && !isLoading) {
         return (
             <div className="p-4 text-center text-sm text-muted-foreground">
                 No recent chats. Search for a user to start a conversation.
@@ -232,7 +258,7 @@ export default function ChatList({ currentUser }: ChatListProps) {
         </div>
       </header>
       <div className="flex-1 overflow-y-auto">
-        {(loadingSearch || loadingChats) ? (
+        {(loadingSearch || isLoading) ? (
           <div className="p-4 flex justify-center items-center h-full">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>

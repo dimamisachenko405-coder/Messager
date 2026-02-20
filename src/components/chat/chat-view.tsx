@@ -24,7 +24,7 @@ import {
   CheckCheck,
 } from 'lucide-react';
 import { format, formatDistanceToNow, isToday, isYesterday, isSameDay } from 'date-fns';
-import { ru } from 'date-fns/locale'; // Import Russian locale
+import { ru } from 'date-fns/locale';
 
 import { useUser, useFirestore } from '@/firebase';
 import type { Message, UserProfile } from '@/lib/types';
@@ -39,7 +39,6 @@ interface ChatViewProps {
   chatId: string;
 }
 
-// Function to format the last active timestamp
 function formatLastActive(timestamp: Timestamp): string {
   if (!timestamp) return 'Unknown';
   const date = timestamp.toDate();
@@ -221,14 +220,26 @@ export default function ChatView({ chatId }: ChatViewProps) {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message, index) => {
           const isCurrentUser = message.senderId === user?.uid;
-          const prevMessage = messages[index - 1];
-          const showDateSeparator = !prevMessage || !isSameDay(prevMessage.createdAt.toDate(), message.createdAt.toDate());
+          
+          let showDateSeparator = false;
+          // We can only show a separator if the current message has a valid timestamp.
+          if (message.createdAt) {
+            const currentDate = message.createdAt.toDate();
+            const prevMessage = messages[index - 1];
+
+            // Show separator if it's the first message, or if the previous message
+            // doesn't have a timestamp, or if the dates are different.
+            if (!prevMessage || !prevMessage.createdAt || !isSameDay(prevMessage.createdAt.toDate(), currentDate)) {
+              showDateSeparator = true;
+            }
+          }
 
           return (
             <Fragment key={message.id}>
               {showDateSeparator && (
                 <div className="flex justify-center my-4">
                   <div className="rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground">
+                    {/* This is safe because showDateSeparator is only true if message.createdAt exists */}
                     {format(message.createdAt.toDate(), 'd MMMM', { locale: ru })}
                   </div>
                 </div>
@@ -251,6 +262,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
                     "text-xs mt-1 flex items-center gap-1",
                     isCurrentUser ? "text-primary-foreground/70 justify-end" : "text-muted-foreground justify-end"
                   )}>
+                    {/* Also guard the time display for optimistic updates */}
                     {message.createdAt && (
                         <span>
                             {format(message.createdAt.toDate(), 'HH:mm')}
