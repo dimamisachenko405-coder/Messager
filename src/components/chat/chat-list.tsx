@@ -41,7 +41,7 @@ export default function ChatList({ currentUser }: ChatListProps) {
     if (!firestore) return null;
 
     if (searchTerm.trim() === '') {
-      return query(collection(firestore, 'userProfiles'));
+      return null;
     } else {
       return query(
         collection(firestore, 'userProfiles'),
@@ -98,39 +98,49 @@ export default function ChatList({ currentUser }: ChatListProps) {
             <SidebarMenuSkeleton showIcon />
           </div>
         ) : (
-          <SidebarMenu>
-            {users.map((user) => {
-              const chatId = getChatId(currentUser.uid, user.uid);
-              return (
-                <SidebarMenuItem key={user.uid}>
-                  <Link
-                    href={`/chat/${chatId}`}
-                    className="w-full"
-                    onClick={() => setOpenMobile(false)}
-                  >
-                    <SidebarMenuButton
-                      size="lg"
-                      isActive={params.chatId === chatId}
-                    >
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage
-                          src={
-                            user.profilePictureUrl ||
-                            `https://avatar.vercel.sh/${user.uid}.png`
-                          }
-                          alt={user.username || 'User'}
-                        />
-                        <AvatarFallback>
-                          {user.username?.[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span>{user.username}</span>
-                    </SidebarMenuButton>
-                  </Link>
-                </SidebarMenuItem>
-              );
-            })}
-          </SidebarMenu>
+          <>
+            {users && users.length > 0 ? (
+                <SidebarMenu>
+                  {users.map((user) => {
+                    const chatId = getChatId(currentUser.uid, user.uid);
+                    return (
+                      <SidebarMenuItem key={user.uid}>
+                        <Link
+                          href={`/chat/${chatId}`}
+                          className="w-full"
+                          onClick={() => setOpenMobile(false)}
+                        >
+                          <SidebarMenuButton
+                            size="lg"
+                            isActive={params.chatId === chatId}
+                          >
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage
+                                src={
+                                  user.profilePictureUrl ||
+                                  `https://avatar.vercel.sh/${user.uid}.png`
+                                }
+                                alt={user.username || 'User'}
+                              />
+                              <AvatarFallback>
+                                {user.username?.[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span>{user.username}</span>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+            ) : (
+                <div className="p-4 text-center text-sm text-sidebar-foreground/70">
+                    {searchTerm.trim() === ''
+                        ? 'Enter a username to search for contacts.'
+                        : 'No users found.'}
+                </div>
+            )}
+          </>
         )}
       </SidebarContent>
       <SidebarFooter>
