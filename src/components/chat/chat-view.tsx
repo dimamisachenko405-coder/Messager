@@ -29,7 +29,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { useSidebar } from '../ui/sidebar';
 
 interface ChatViewProps {
   chatId: string;
@@ -40,7 +39,6 @@ export default function ChatView({ chatId }: ChatViewProps) {
   const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
-  const { toggleSidebar, isMobile } = useSidebar();
   
   const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -50,11 +48,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const handleBack = () => {
-    if (isMobile) {
-      router.push('/chat');
-    } else {
-      toggleSidebar();
-    }
+    router.push('/chat');
   };
 
   useEffect(() => {
