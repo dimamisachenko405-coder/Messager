@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   collection,
@@ -23,7 +23,8 @@ import {
   Check,
   CheckCheck,
 } from 'lucide-react';
-import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
+import { format, formatDistanceToNow, isToday, isYesterday, isSameDay } from 'date-fns';
+import { ru } from 'date-fns/locale'; // Import Russian locale
 
 import { useUser, useFirestore } from '@/firebase';
 import type { Message, UserProfile } from '@/lib/types';
@@ -32,6 +33,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useDrafts } from '@/context/drafts-context';
 
 interface ChatViewProps {
   chatId: string;
@@ -43,22 +45,18 @@ function formatLastActive(timestamp: Timestamp): string {
   const date = timestamp.toDate();
   const now = new Date();
 
-  // If last active was less than 5 minutes ago, show "Online"
   if (now.getTime() - date.getTime() < 5 * 60 * 1000) {
     return 'Online';
   }
   
-  // If it was today, show "last seen today at HH:mm"
   if (isToday(date)) {
     return `last seen today at ${format(date, 'HH:mm')}`;
   }
 
-  // If it was yesterday, show "last seen yesterday at HH:mm"
   if (isYesterday(date)) {
     return `last seen yesterday at ${format(date, 'HH:mm')}`;
   }
 
-  // Otherwise, show the relative time
   return `last seen ${formatDistanceToNow(date, { addSuffix: true })}`;
 }
 
@@ -67,17 +65,22 @@ export default function ChatView({ chatId }: ChatViewProps) {
   const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
+  const { drafts, setDrafts } = useDrafts();
   
   const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
-  const [messageText, setMessageText] = useState('');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageText = drafts[chatId] || '';
 
   const handleBack = () => {
     router.push('/chat');
   };
+
+  const handleMessageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDrafts(prev => ({ ...prev, [chatId]: e.target.value }));
+  }
 
   useEffect(() => {
     if (!user || !chatId || !firestore) return;
@@ -138,52 +141,51 @@ export default function ChatView({ chatId }: ChatViewProps) {
       );
     };
 
-    markMessagesAsRead().catch(error => {
-        console.error("Failed to mark messages as read:", error);
-    });
+    markMessagesAsRead().catch(console.error);
 }, [messages, firestore, user, chatId]);
   
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+  }, [messages.length]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageText.trim() || !user || !firestore) return;
 
     const currentMessageText = messageText;
-    setMessageText('');
+    setDrafts(prev => ({ ...prev, [chatId]: ''}));
+    const createdTimestamp = serverTimestamp() as Timestamp;
 
     try {
       const chatRef = doc(firestore, 'chats', chatId);
       const messagesCol = collection(chatRef, 'messages');
-
       const userIds = chatId.split('_');
-      await setDoc(chatRef, {
-        id: chatId,
-        participantIds: userIds,
-      }, { merge: true });
 
-      await addDoc(messagesCol, {
+      await setDoc(chatRef, { id: chatId, participantIds: userIds }, { merge: true });
+
+      const newDoc = await addDoc(messagesCol, {
         senderId: user.uid,
         text: currentMessageText,
-        createdAt: serverTimestamp() as Timestamp,
+        createdAt: createdTimestamp,
         chatId: chatId,
         isRead: false,
       });
 
-      // Update the user's last active time
+      await updateDoc(chatRef, {
+        lastMessage: {
+          id: newDoc.id,
+          text: currentMessageText,
+          createdAt: createdTimestamp,
+          senderId: user.uid,
+        },
+      });
+
       const userProfileRef = doc(firestore, 'userProfiles', user.uid);
       await updateDoc(userProfileRef, { lastActive: serverTimestamp() });
-
     } catch (error) {
       console.error('Error sending message:', error);
-      toast({
-        title: 'Error sending message',
-        description: 'Could not send your message. Please try again.',
-        variant: 'destructive',
-      });
-      setMessageText(currentMessageText);
+      setDrafts(prev => ({ ...prev, [chatId]: currentMessageText }));
+      toast({ title: 'Error sending message', description: 'Could not send your message.', variant: 'destructive' });
     }
   };
 
@@ -217,48 +219,59 @@ export default function ChatView({ chatId }: ChatViewProps) {
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => {
+        {messages.map((message, index) => {
           const isCurrentUser = message.senderId === user?.uid;
+          const prevMessage = messages[index - 1];
+          const showDateSeparator = !prevMessage || !isSameDay(prevMessage.createdAt.toDate(), message.createdAt.toDate());
+
           return (
-            <div
-              key={message.id}
-              className={cn('flex items-end gap-2', isCurrentUser ? 'justify-end' : 'justify-start')}
-            >
-              {!isCurrentUser && otherUser && (
-                 <Avatar className="h-8 w-8">
-                    <AvatarImage src={otherUser.profilePictureUrl || `https://avatar.vercel.sh/${otherUser.uid}.png`} />
-                    <AvatarFallback>{otherUser.username?.[0]}</AvatarFallback>
-                </Avatar>
-              )}
-              <div className={cn(
-                  'max-w-xs md:max-w-md lg:max-w-lg rounded-lg px-3 py-2',
-                  isCurrentUser ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-secondary text-secondary-foreground rounded-bl-none'
-              )}>
-                <p className="text-sm break-words">{message.text}</p>
-                <div className={cn(
-                  "text-xs mt-1 flex items-center gap-1",
-                  isCurrentUser ? "text-primary-foreground/70 justify-end" : "text-muted-foreground justify-end"
-                )}>
-                  {message.createdAt && (
-                      <span>
-                          {format(message.createdAt.toDate(), 'HH:mm')}
-                      </span>
-                  )}
-                  {isCurrentUser &&
-                    (message.isRead ? (
-                      <CheckCheck className="h-4 w-4" />
-                    ) : (
-                      <Check className="h-4 w-4" />
-                    ))}
+            <Fragment key={message.id}>
+              {showDateSeparator && (
+                <div className="flex justify-center my-4">
+                  <div className="rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground">
+                    {format(message.createdAt.toDate(), 'd MMMM', { locale: ru })}
+                  </div>
                 </div>
-              </div>
-                {isCurrentUser && user && (
-                    <Avatar className="h-8 w-8">
-                        <AvatarImage src={user.photoURL || `https://avatar.vercel.sh/${user.uid}.png`} />
-                        <AvatarFallback>{user.displayName?.[0]}</AvatarFallback>
-                    </Avatar>
+              )}
+              <div
+                className={cn('flex items-end gap-2', isCurrentUser ? 'justify-end' : 'justify-start')}
+              >
+                {!isCurrentUser && otherUser && (
+                   <Avatar className="h-8 w-8">
+                      <AvatarImage src={otherUser.profilePictureUrl || `https://avatar.vercel.sh/${otherUser.uid}.png`} />
+                      <AvatarFallback>{otherUser.username?.[0]}</AvatarFallback>
+                  </Avatar>
                 )}
-            </div>
+                <div className={cn(
+                    'max-w-xs md:max-w-md lg:max-w-lg rounded-lg px-3 py-2',
+                    isCurrentUser ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-secondary text-secondary-foreground rounded-bl-none'
+                )}>
+                  <p className="text-sm break-words">{message.text}</p>
+                  <div className={cn(
+                    "text-xs mt-1 flex items-center gap-1",
+                    isCurrentUser ? "text-primary-foreground/70 justify-end" : "text-muted-foreground justify-end"
+                  )}>
+                    {message.createdAt && (
+                        <span>
+                            {format(message.createdAt.toDate(), 'HH:mm')}
+                        </span>
+                    )}
+                    {isCurrentUser &&
+                      (message.isRead ? (
+                        <CheckCheck className="h-4 w-4" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      ))}
+                  </div>
+                </div>
+                  {isCurrentUser && user && (
+                      <Avatar className="h-8 w-8">
+                          <AvatarImage src={user.photoURL || `https://avatar.vercel.sh/${user.uid}.png`} />
+                          <AvatarFallback>{user.displayName?.[0]}</AvatarFallback>
+                      </Avatar>
+                  )}
+              </div>
+            </Fragment>
           );
         })}
         <div ref={messagesEndRef} />
@@ -271,7 +284,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
             </Button>
             <Input
                 value={messageText}
-                onChange={(e) => setMessageText(e.target.value)}
+                onChange={handleMessageChange}
                 placeholder="Type a message..."
                 className="flex-1"
                 autoComplete="off"

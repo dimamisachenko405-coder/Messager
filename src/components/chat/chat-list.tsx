@@ -20,9 +20,14 @@ import { Input } from '@/components/ui/input';
 import { useAuth, useCollection, useFirestore } from '@/firebase';
 import { User } from 'firebase/auth';
 import { cn } from '@/lib/utils';
+import { useDrafts } from '@/context/drafts-context'; // Import the context hook
 
 interface ChatListProps {
   currentUser: User;
+}
+
+interface ChatWithUser extends Chat {
+  otherUser: UserProfile;
 }
 
 export default function ChatList({ currentUser }: ChatListProps) {
@@ -31,34 +36,27 @@ export default function ChatList({ currentUser }: ChatListProps) {
   const params = useParams();
   const firestore = useFirestore();
   const auth = useAuth();
+  const { drafts } = useDrafts(); // Use the context hook
+  const [chatListData, setChatListData] = useState<ChatWithUser[]>([]);
+  const [loadingChats, setLoadingChats] = useState(true);
 
-  const [otherUsers, setOtherUsers] = useState<UserProfile[]>([]);
-
+  // Search logic
   const usersQuery = useMemo(() => {
-    if (!firestore) return null;
-
-    if (searchTerm.trim() === '') {
-      return null;
-    } else {
-      return query(
-        collection(firestore, 'userProfiles'),
-        where('username', '>=', searchTerm),
-        where('username', '<=', searchTerm + '\uf8ff')
-      );
-    }
+    if (!firestore || searchTerm.trim() === '') return null;
+    return query(
+      collection(firestore, 'userProfiles'),
+      where('username', '>=', searchTerm),
+      where('username', '<=', searchTerm + '\uf8ff')
+    );
   }, [firestore, searchTerm]);
 
-  const {
-    data: searchedUsers,
-    isLoading: loading,
-    error,
-  } = useCollection<UserProfile>(usersQuery);
-
-  const users = useMemo(() => {
+  const { data: searchedUsers, isLoading: loadingSearch } = useCollection<UserProfile>(usersQuery);
+  const searchedOtherUsers = useMemo(() => {
     if (!searchedUsers) return [];
     return searchedUsers.filter((user) => user.uid !== currentUser.uid);
   }, [searchedUsers, currentUser.uid]);
 
+  // Chat list logic
   const chatsQuery = useMemo(() => {
     if (!firestore) return null;
     return query(
@@ -70,31 +68,37 @@ export default function ChatList({ currentUser }: ChatListProps) {
   const { data: chats } = useCollection<Chat>(chatsQuery);
 
   useEffect(() => {
-    if (error) {
-      console.error('Error fetching users:', error);
-    }
-  }, [error]);
-
-  useEffect(() => {
     if (!chats || !firestore) return;
 
-    const fetchOtherUsers = async () => {
-      const otherUserIds = chats
-        .map((chat) => chat.participantIds.find((id: string) => id !== currentUser.uid))
-        .filter((id) => id !== undefined) as string[];
+    const fetchChatUsers = async () => {
+      setLoadingChats(true);
+      const chatsWithUsers = await Promise.all(
+        chats.map(async (chat) => {
+          const otherUserId = chat.participantIds.find(id => id !== currentUser.uid);
+          if (!otherUserId) return null;
 
-      const uniqueUserIds = [...new Set(otherUserIds)];
-
-      const usersData = await Promise.all(
-        uniqueUserIds.map(async (userId) => {
-          const userDoc = await getDoc(doc(firestore, 'userProfiles', userId));
-          return userDoc.data() as UserProfile;
+          const userDoc = await getDoc(doc(firestore, 'userProfiles', otherUserId));
+          if (!userDoc.exists()) return null;
+          
+          return {
+            ...chat,
+            otherUser: userDoc.data() as UserProfile
+          };
         })
       );
-      setOtherUsers(usersData.filter(Boolean));
+      
+      const filteredAndSorted = (chatsWithUsers.filter(Boolean) as ChatWithUser[])
+        .sort((a, b) => {
+          const timeA = a.lastMessage?.createdAt?.toDate().getTime() || 0;
+          const timeB = b.lastMessage?.createdAt?.toDate().getTime() || 0;
+          return timeB - timeA;
+        });
+
+      setChatListData(filteredAndSorted);
+      setLoadingChats(false);
     };
 
-    fetchOtherUsers();
+    fetchChatUsers();
   }, [chats, firestore, currentUser.uid]);
 
   const handleLogout = async () => {
@@ -108,7 +112,107 @@ export default function ChatList({ currentUser }: ChatListProps) {
     return [userId1, userId2].sort().join('_');
   };
 
-  const displayedUsers = searchTerm.trim() === '' ? otherUsers : users;
+  const renderChatList = () => {
+    if (chatListData.length === 0) {
+        return (
+            <div className="p-4 text-center text-sm text-muted-foreground">
+                No recent chats. Search for a user to start a conversation.
+            </div>
+        );
+    }
+
+    return (
+        <ul className="p-2 space-y-1">
+            {chatListData.map((chat) => {
+              const draftMessage = drafts[chat.id];
+              return (
+                <li key={chat.id}>
+                    <Link href={`/chat/${chat.id}`} className="block">
+                    <Button
+                        variant="ghost"
+                        className={cn(
+                        'w-full justify-start h-auto p-2 gap-3',
+                        params.chatId === chat.id && 'bg-accent'
+                        )}
+                    >
+                        <Avatar className="h-9 w-9">
+                        <AvatarImage
+                            src={
+                            chat.otherUser.profilePictureUrl ||
+                            `https://avatar.vercel.sh/${chat.otherUser.uid}.png`
+                            }
+                            alt={chat.otherUser.username || 'User'}
+                        />
+                        <AvatarFallback>
+                            {chat.otherUser.username?.[0]}
+                        </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 text-left overflow-hidden">
+                            <p className="truncate font-semibold">{chat.otherUser.username}</p>
+                            {draftMessage ? (
+                                <p className="truncate text-xs text-destructive">
+                                    <span className='font-medium'>Draft:</span> {draftMessage}
+                                </p>
+                            ) : chat.lastMessage?.text && (
+                                <p className="truncate text-xs text-muted-foreground">
+                                    {chat.lastMessage.text}
+                                </p>
+                            )}
+                        </div>
+                    </Button>
+                    </Link>
+                </li>
+              );
+            })}
+        </ul>
+    );
+  };
+
+  const renderSearchResults = () => {
+      if (searchedOtherUsers.length === 0) {
+          return (
+              <div className="p-4 text-center text-sm text-muted-foreground">
+                  No users found.
+              </div>
+          );
+      }
+      return (
+          <ul className="p-2 space-y-1">
+              {searchedOtherUsers.map((user) => {
+              const chatId = getChatId(currentUser.uid, user.uid);
+              return (
+                  <li key={user.uid}>
+                  <Link href={`/chat/${chatId}`} className="block">
+                      <Button
+                      variant="ghost"
+                      className={cn(
+                          'w-full justify-start h-auto p-2 gap-3',
+                          params.chatId === chatId && 'bg-accent'
+                      )}
+                      >
+                      <Avatar className="h-9 w-9">
+                          <AvatarImage
+                          src={
+                              user.profilePictureUrl ||
+                              `https://avatar.vercel.sh/${user.uid}.png`
+                          }
+                          alt={user.username || 'User'}
+                          />
+                          <AvatarFallback>
+                          {user.username?.[0]}
+                          </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 text-left overflow-hidden">
+                        <p className="truncate font-semibold">{user.username}</p>
+                      </div>
+                      </Button>
+                  </Link>
+                  </li>
+              );
+              })}
+          </ul>
+      );
+  }
 
   return (
     <div className="flex flex-col h-full w-full bg-card">
@@ -128,53 +232,12 @@ export default function ChatList({ currentUser }: ChatListProps) {
         </div>
       </header>
       <div className="flex-1 overflow-y-auto">
-        {loading ? (
+        {(loadingSearch || loadingChats) ? (
           <div className="p-4 flex justify-center items-center h-full">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         ) : (
-          <>
-            {displayedUsers && displayedUsers.length > 0 ? (
-              <ul className="p-2 space-y-1">
-                {displayedUsers.map((user) => {
-                  const chatId = getChatId(currentUser.uid, user.uid);
-                  return (
-                    <li key={user.uid}>
-                      <Link href={`/chat/${chatId}`} className="block">
-                        <Button
-                          variant="ghost"
-                          className={cn(
-                            'w-full justify-start h-auto p-2 gap-3',
-                            params.chatId === chatId && 'bg-accent'
-                          )}
-                        >
-                          <Avatar className="h-9 w-9">
-                            <AvatarImage
-                              src={
-                                user.profilePictureUrl ||
-                                `https://avatar.vercel.sh/${user.uid}.png`
-                              }
-                              alt={user.username || 'User'}
-                            />
-                            <AvatarFallback>
-                              {user.username?.[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="truncate">{user.username}</span>
-                        </Button>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <div className="p-4 text-center text-sm text-muted-foreground">
-                {searchTerm.trim() === ''
-                  ? 'No recent chats. Search for a user to start a conversation.'
-                  : 'No users found.'}
-              </div>
-            )}
-          </>
+            searchTerm.trim() === '' ? renderChatList() : renderSearchResults()
         )}
       </div>
       <footer className="p-2 border-t">
