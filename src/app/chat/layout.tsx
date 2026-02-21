@@ -9,14 +9,14 @@ import ChatList from '@/components/chat/chat-list';
 import type { User } from 'firebase/auth';
 import { cn } from '@/lib/utils';
 import { DraftsProvider } from '@/context/drafts-context';
+import { MessagesProvider } from '@/context/messages-context'; // Import the new provider
 
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
-  const pathname = usePathname(); // Use usePathname
+  const pathname = usePathname();
 
-  // Check if the current URL is a chat page (e.g., /chat/some-id)
   const hasChatId = /\/chat\/.+/.test(pathname);
 
   useEffect(() => {
@@ -25,7 +25,6 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     }
   }, [user, isUserLoading, router]);
 
-  // Update last active status
   useEffect(() => {
     if (user && firestore) {
       const userProfileRef = doc(firestore, 'userProfiles', user.uid);
@@ -47,27 +46,31 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   }
   
   return (
-    <DraftsProvider>
-      <div className="flex h-screen w-full">
-        <aside
-          className={cn(
-            'flex-col bg-card',
-            hasChatId
-              ? 'hidden md:flex md:w-[340px] md:border-r'
-              : 'flex w-full md:w-[340px] md:border-r'
-          )}
-        >
-          <ChatList currentUser={user as User} />
-        </aside>
-        <main
-          className={cn(
-            'flex-1 flex-col',
-            hasChatId ? 'flex' : 'hidden md:flex'
-          )}
-        >
-          {children}
-        </main>
-      </div>
-    </DraftsProvider>
+    // Wrap both providers. The order doesn't strictly matter here,
+    // but it's good to be consistent.
+    <MessagesProvider>
+      <DraftsProvider>
+        <div className="flex h-screen w-full">
+          <aside
+            className={cn(
+              'flex-col bg-card',
+              hasChatId
+                ? 'hidden md:flex md:w-[340px] md:border-r'
+                : 'flex w-full md:w-[340px] md:border-r'
+            )}
+          >
+            <ChatList currentUser={user as User} />
+          </aside>
+          <main
+            className={cn(
+              'flex-1 flex-col',
+              hasChatId ? 'flex' : 'hidden md:flex'
+            )}
+          >
+            {children}
+          </main>
+        </div>
+      </DraftsProvider>
+    </MessagesProvider>
   );
 }

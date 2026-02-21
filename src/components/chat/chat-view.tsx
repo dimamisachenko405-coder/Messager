@@ -13,6 +13,8 @@ import {
   serverTimestamp,
   updateDoc,
   type Timestamp,
+  increment,
+  getDoc,
 } from 'firebase/firestore';
 import {
   ArrowLeft,
@@ -34,6 +36,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useDrafts } from '@/context/drafts-context';
+import { useMessages } from '@/context/messages-context';
 
 interface ChatViewProps {
   chatId: string;
@@ -65,10 +68,11 @@ export default function ChatView({ chatId }: ChatViewProps) {
   const router = useRouter();
   const { toast } = useToast();
   const { drafts, setDrafts } = useDrafts();
+  const { messagesCache, setMessagesForChat } = useMessages();
   
   const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
+  const messages = messagesCache[chatId] || [];
+  const [loading, setLoading] = useState(!messagesCache[chatId]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageText = drafts[chatId] || '';
@@ -109,40 +113,40 @@ export default function ChatView({ chatId }: ChatViewProps) {
       const msgs = snapshot.docs.map(
         (doc) => ({ id: doc.id, ...doc.data() } as Message),
       );
-      setMessages(msgs);
-      setLoading(false);
+      setMessagesForChat(chatId, msgs);
+      if (loading) {
+        setLoading(false);
+      }
     }, (error) => {
       console.error("Error fetching messages:", error);
-      setLoading(false);
+      toast({ title: 'Error', description: 'Could not fetch messages.', variant: 'destructive' });
+      if (loading) {
+        setLoading(false);
+      }
     });
+
+    const resetUnreadCount = async () => {
+      if (!user) return;
+      const chatRef = doc(firestore, 'chats', chatId);
+      const chatSnap = await getDoc(chatRef);
+
+      if (chatSnap.exists()) {
+        const chatData = chatSnap.data();
+        if (chatData.unreadCount && chatData.unreadCount[user.uid] > 0) {
+          const userUnreadCountField = `unreadCount.${user.uid}`;
+          await updateDoc(chatRef, { [userUnreadCountField]: 0 });
+        }
+      }
+    };
+
+    resetUnreadCount().catch(console.error);
 
     return () => {
       unsubUser();
       unsubMessages();
     };
-  }, [chatId, user, router, toast, firestore]);
+  }, [chatId, user, firestore]);
 
-  useEffect(() => {
-    if (!firestore || !user || messages.length === 0) return;
-
-    const markMessagesAsRead = async () => {
-      const unreadMessages = messages.filter(
-        (msg) => msg.senderId !== user.uid && !msg.isRead
-      );
-
-      if (unreadMessages.length === 0) return;
-
-      await Promise.all(
-        unreadMessages.map((msg) => {
-          const msgRef = doc(firestore, 'chats', chatId, 'messages', msg.id);
-          return updateDoc(msgRef, { isRead: true });
-        })
-      );
-    };
-
-    markMessagesAsRead().catch(console.error);
-}, [messages, firestore, user, chatId]);
-  
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
   }, [messages.length]);
@@ -154,22 +158,36 @@ export default function ChatView({ chatId }: ChatViewProps) {
     const currentMessageText = messageText;
     setDrafts(prev => ({ ...prev, [chatId]: ''}));
     const createdTimestamp = serverTimestamp() as Timestamp;
+    const userIds = chatId.split('_');
+    const otherUserId = userIds.find(id => id !== user.uid);
+
+    if (!otherUserId) {
+        toast({ title: 'Error', description: 'Cannot find the other user in this chat.', variant: 'destructive' });
+        return;
+    }
 
     try {
       const chatRef = doc(firestore, 'chats', chatId);
       const messagesCol = collection(chatRef, 'messages');
-      const userIds = chatId.split('_');
-
-      await setDoc(chatRef, { id: chatId, participantIds: userIds }, { merge: true });
+      
+      await setDoc(chatRef, 
+        { 
+          id: chatId, 
+          participantIds: userIds,
+          unreadCount: { [user.uid]: 0, [otherUserId]: 0 }
+        },
+        { merge: true } 
+      );
 
       const newDoc = await addDoc(messagesCol, {
         senderId: user.uid,
         text: currentMessageText,
         createdAt: createdTimestamp,
         chatId: chatId,
-        isRead: false,
+        isRead: false, 
       });
 
+      const otherUserUnreadCountField = `unreadCount.${otherUserId}`;
       await updateDoc(chatRef, {
         lastMessage: {
           id: newDoc.id,
@@ -177,6 +195,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
           createdAt: createdTimestamp,
           senderId: user.uid,
         },
+        [otherUserUnreadCountField]: increment(1)
       });
 
       const userProfileRef = doc(firestore, 'userProfiles', user.uid);
@@ -222,13 +241,9 @@ export default function ChatView({ chatId }: ChatViewProps) {
           const isCurrentUser = message.senderId === user?.uid;
           
           let showDateSeparator = false;
-          // We can only show a separator if the current message has a valid timestamp.
           if (message.createdAt) {
             const currentDate = message.createdAt.toDate();
             const prevMessage = messages[index - 1];
-
-            // Show separator if it's the first message, or if the previous message
-            // doesn't have a timestamp, or if the dates are different.
             if (!prevMessage || !prevMessage.createdAt || !isSameDay(prevMessage.createdAt.toDate(), currentDate)) {
               showDateSeparator = true;
             }
@@ -239,7 +254,6 @@ export default function ChatView({ chatId }: ChatViewProps) {
               {showDateSeparator && (
                 <div className="flex justify-center my-4">
                   <div className="rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground">
-                    {/* This is safe because showDateSeparator is only true if message.createdAt exists */}
                     {format(message.createdAt.toDate(), 'd MMMM', { locale: ru })}
                   </div>
                 </div>
@@ -262,7 +276,6 @@ export default function ChatView({ chatId }: ChatViewProps) {
                     "text-xs mt-1 flex items-center gap-1",
                     isCurrentUser ? "text-primary-foreground/70 justify-end" : "text-muted-foreground justify-end"
                   )}>
-                    {/* Also guard the time display for optimistic updates */}
                     {message.createdAt && (
                         <span>
                             {format(message.createdAt.toDate(), 'HH:mm')}

@@ -22,4 +22,7 @@ export type Chat = {
   id: string;
   participantIds: string[];
   lastMessage?: Message;
+  // Add the unreadCount field
+  // It's a map where the key is a user's UID and the value is their unread count
+  unreadCount?: { [key: string]: number };
 };
